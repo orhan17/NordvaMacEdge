@@ -142,10 +142,27 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
     #expect(d.tap(0.04, 0.93, after: 0.15) == [.tapped(.topLeft), .doubleTapped(.topLeft)])
 }
 
-@Test func doubleTapBottomLeft() {
+@Test func doubleTapBottomRight() {
     var d = Driver()
-    let events = d.tap(0.05, 0.05) + d.tap(0.06, 0.08, after: 0.2)
-    #expect(doubleTaps(events) == [.bottomLeft])
+    let events = d.tap(0.95, 0.05) + d.tap(0.94, 0.08, after: 0.2)
+    #expect(doubleTaps(events) == [.bottomRight])
+}
+
+@Test func inactiveCornersAreOrdinaryTrackpad() {
+    // По умолчанию слушаем только левый верхний и правый нижний.
+    var d = Driver()
+    let events = d.tap(0.03, 0.05) + d.tap(0.03, 0.05, after: 0.15)
+        + d.tap(0.97, 0.95, after: 0.5) + d.tap(0.97, 0.95, after: 0.15)
+    #expect(events.isEmpty)
+}
+
+@Test func swappedCornersFollowEdges() {
+    var d = Driver()
+    d.recognizer.config.activeCorners = [.topRight, .bottomLeft]
+    let events = d.tap(0.97, 0.95) + d.tap(0.97, 0.95, after: 0.15)
+        + d.tap(0.03, 0.05, after: 0.5) + d.tap(0.03, 0.05, after: 0.15)
+        + d.tap(0.03, 0.95, after: 0.5) + d.tap(0.03, 0.95, after: 0.15)
+    #expect(doubleTaps(events) == [.topRight, .bottomLeft])
 }
 
 @Test func cornerIsWiderThanEdge() {
@@ -168,8 +185,8 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
 
 @Test func tapsInDifferentCornersAreNotDouble() {
     var d = Driver()
-    let events = d.tap(0.03, 0.95) + d.tap(0.03, 0.05, after: 0.15)
-    #expect(events == [.tapped(.topLeft), .tapped(.bottomLeft)])
+    let events = d.tap(0.03, 0.95) + d.tap(0.97, 0.05, after: 0.15)
+    #expect(events == [.tapped(.topLeft), .tapped(.bottomRight)])
 }
 
 @Test func touchElsewhereBetweenTapsBreaksDouble() {
@@ -187,7 +204,7 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
 @Test func physicalClickInCornerIsNotTap() {
     var d = Driver()
     d.buttonDown = true
-    let events = d.frames([finger(0.03, 0.05), finger(0.03, 0.05), []])
+    let events = d.frames([finger(0.97, 0.05), finger(0.97, 0.05), []])
     #expect(events.isEmpty)
 }
 

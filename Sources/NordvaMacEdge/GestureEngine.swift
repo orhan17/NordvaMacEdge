@@ -55,6 +55,10 @@ final class GestureEngine {
         dispatch(events)
     }
 
+    func setActiveCorners(_ corners: Set<Corner>) {
+        lock.withLock { recognizer.config.activeCorners = corners }
+    }
+
     /// Спрашивает ClickBlocker на каждый клик.
     func shouldSuppressClick() -> Bool {
         lock.withLock { ProcessInfo.processInfo.systemUptime < suppressClicksUntil }

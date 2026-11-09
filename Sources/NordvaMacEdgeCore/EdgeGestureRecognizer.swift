@@ -3,9 +3,19 @@ public enum Edge: String, Sendable {
     case right
 }
 
-public enum Corner: String, Sendable {
+public enum Corner: String, Sendable, CaseIterable {
     case topLeft
+    case topRight
     case bottomLeft
+    case bottomRight
+
+    public var edge: Edge {
+        self == .topLeft || self == .bottomLeft ? .left : .right
+    }
+
+    public var isTop: Bool {
+        self == .topLeft || self == .topRight
+    }
 }
 
 /// Палец на трекпаде. x: 0 слева, 1 справа. y: 0 снизу, 1 сверху.
@@ -54,6 +64,9 @@ public struct EdgeGestureRecognizer: Sendable {
         public var maxTapDuration: Double = 0.3
         /// Сколько секунд может пройти от отрыва первого тапа до касания вторым.
         public var doubleTapInterval: Double = 0.4
+        /// Углы, которые слушаем. Остальные остаются обычной частью трекпада: клик
+        /// в них работает как всегда.
+        public var activeCorners: Set<Corner> = [.topLeft, .bottomRight]
 
         public init() {}
     }
@@ -81,7 +94,8 @@ public struct EdgeGestureRecognizer: Sendable {
         case active(edge: Edge, id: Int32, lastY: Double)
     }
 
-    private let config: Config
+    /// Можно менять на ходу, например когда края поменяли местами.
+    public var config: Config
     private var state: State = .idle
     /// Первый тап возможного двойного.
     private var lastTap: Tap?
@@ -191,9 +205,18 @@ public struct EdgeGestureRecognizer: Sendable {
     }
 
     private func corner(at touch: TouchPoint) -> Corner? {
-        guard touch.x <= config.cornerWidth else { return nil }
-        if touch.y >= 1 - config.cornerHeight { return .topLeft }
-        if touch.y <= config.cornerHeight { return .bottomLeft }
-        return nil
+        let left = touch.x <= config.cornerWidth
+        let right = touch.x >= 1 - config.cornerWidth
+        let top = touch.y >= 1 - config.cornerHeight
+        let bottom = touch.y <= config.cornerHeight
+        let corner: Corner?
+        switch (left, right, top, bottom) {
+        case (true, _, true, _): corner = .topLeft
+        case (true, _, _, true): corner = .bottomLeft
+        case (_, true, true, _): corner = .topRight
+        case (_, true, _, true): corner = .bottomRight
+        default: corner = nil
+        }
+        return corner.flatMap { config.activeCorners.contains($0) ? $0 : nil }
     }
 }

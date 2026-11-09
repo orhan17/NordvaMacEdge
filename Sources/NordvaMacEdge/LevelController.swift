@@ -70,26 +70,26 @@ final class LevelController {
 
     // MARK: - Углы
 
+    /// Слушаются только два угла: верхний на стороне яркости и нижний на стороне громкости.
     private func runAction(for corner: Corner) {
-        switch corner {
-        case .topLeft:
+        if corner.isTop {
             brightness.write(1)
             Log.debug("двойной тап: яркость на максимум")
-            flash(.brightness, level: brightness.read() ?? 1)
-        case .bottomLeft:
+            flash(.brightness, at: corner.edge, level: brightness.read() ?? 1)
+        } else {
             guard let muted = volume.toggleMute() else {
                 Log.debug("двойной тап: это устройство вывода не умеет выключать звук")
                 return
             }
             Log.debug("двойной тап: звук \(muted ? "выключен" : "включён")")
-            flash(.volume, level: muted ? 0 : volume.read())
+            flash(.volume, at: corner.edge, level: muted ? 0 : volume.read())
         }
     }
 
     /// Показать индикатор и сразу запланировать скрытие.
-    private func flash(_ kind: LevelKind, level: Float?) {
+    private func flash(_ kind: LevelKind, at edge: Edge, level: Float?) {
         DispatchQueue.main.async { [hud] in
-            hud.show(kind: kind, edge: .left, level: level)
+            hud.show(kind: kind, edge: edge, level: level)
             hud.hideSoon()
         }
     }

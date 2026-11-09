@@ -27,6 +27,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         keyEquivalent: ""
     )
     private let statusLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let brightnessHint = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let volumeHint = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+
+    private var swapped: Bool {
+        defaults.bool(forKey: Keys.swapEdges)
+    }
+
+    /// Углы едут вместе с краями: яркость сверху на своей стороне, звук снизу на своей.
+    private var activeCorners: Set<Corner> {
+        swapped ? [.topRight, .bottomLeft] : [.topLeft, .bottomRight]
+    }
 
     init(demoHUD: Bool) {
         self.demoHUD = demoHUD
@@ -49,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let engine = GestureEngine(onEvent: levels.handle)
         engine.isEnabled = defaults.bool(forKey: Keys.enabled)
+        engine.setActiveCorners(activeCorners)
         self.engine = engine
 
         touches = TouchSource(onFrame: engine.process)
@@ -134,10 +146,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(permissionItem)
 
         menu.addItem(.separator())
-        for hint in ["Двойной тап слева вверху: яркость на максимум", "Двойной тап слева внизу: звук вкл/выкл"] {
-            let line = NSMenuItem(title: hint, action: nil, keyEquivalent: "")
-            line.isEnabled = false
-            menu.addItem(line)
+        for hint in [brightnessHint, volumeHint] {
+            hint.isEnabled = false
+            menu.addItem(hint)
         }
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Выйти", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -146,7 +157,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         enabledItem.state = defaults.bool(forKey: Keys.enabled) ? .on : .off
-        swapItem.state = defaults.bool(forKey: Keys.swapEdges) ? .on : .off
+        swapItem.state = swapped ? .on : .off
+        brightnessHint.title = "Двойной тап \(swapped ? "справа" : "слева") вверху: яркость на максимум"
+        volumeHint.title = "Двойной тап \(swapped ? "слева" : "справа") внизу: звук вкл/выкл"
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         if ClickBlocker.hasPermission { clickBlocker?.start() }
         updatePermissionItem()
@@ -159,7 +172,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func toggleSwap() {
-        defaults.set(!defaults.bool(forKey: Keys.swapEdges), forKey: Keys.swapEdges)
+        defaults.set(!swapped, forKey: Keys.swapEdges)
+        engine?.setActiveCorners(activeCorners)
     }
 
     @objc private func toggleLogin() {
