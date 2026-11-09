@@ -13,10 +13,11 @@ private struct Driver {
     var recognizer = EdgeGestureRecognizer(config: instantSideSlides())
     var time = 0.0
     var buttonDown = false
+    var typing = false
 
     mutating func frame(_ touches: [TouchPoint], after step: Double = 0.01) -> [GestureEvent] {
         time += step
-        return recognizer.process(touches, at: time, isButtonDown: buttonDown)
+        return recognizer.process(touches, at: time, isButtonDown: buttonDown, isTyping: typing)
     }
 
     mutating func frames(_ list: [[TouchPoint]]) -> [GestureEvent] {
@@ -30,8 +31,56 @@ private struct Driver {
     var holdsPointer: Bool { recognizer.holdsPointer }
 }
 
-private func finger(_ x: Double, _ y: Double, id: Int32 = 1) -> [TouchPoint] {
-    [TouchPoint(id: id, x: x, y: y)]
+private func finger(_ x: Double, _ y: Double, id: Int32 = 1, axis: Double = 0) -> [TouchPoint] {
+    [TouchPoint(id: id, x: x, y: y, majorAxis: axis)]
+}
+
+// MARK: - Palms, thumbs and typing (values from logged false triggers)
+
+@Test func palmOnTheEdgeIsIgnored() {
+    var d = Driver()
+    #expect(d.frames([finger(0.989, 0.27, axis: 14.75), finger(0.989, 0.32, axis: 14.75), []]).isEmpty)
+    #expect(!d.holdsPointer)
+}
+
+@Test func fingertipOnTheEdgeStillSlides() {
+    var d = Driver()
+    let events = d.frames([finger(0.994, 0.56, axis: 8.27), finger(0.994, 0.62, axis: 8.27), []])
+    #expect(events.first == .began(.right))
+}
+
+@Test func palmLandingDuringASlideEndsIt() {
+    var d = Driver()
+    _ = d.frames([finger(0.97, 0.3, axis: 8), finger(0.97, 0.4, axis: 8)])
+    #expect(d.frame(finger(0.97, 0.45, axis: 16)) == [.ended(.right)])
+    #expect(d.frame(finger(0.97, 0.6, axis: 8)).isEmpty)
+}
+
+@Test func palmAtTheBottomDoesNotOpenTheSwitcher() {
+    var d = Driver()
+    d.recognizer.config.bottomEdgeEnabled = true
+    let frames = (0...60).map { finger(0.76 + 0.002 * Double($0), 0.01, axis: 22.9) } + [[]]
+    #expect(d.frames(frames).isEmpty)
+}
+
+@Test func thumbOnTheTopBorderDoesNotDoubleTap() {
+    var d = Driver()
+    let events = d.tap(0.064, 0.997) + d.tap(0.06, 0.999, after: 0.13)
+    #expect(events.isEmpty)
+}
+
+@Test func cornerTapJustBelowTheBorderStillWorks() {
+    var d = Driver()
+    let events = d.tap(0.05, 0.95) + d.tap(0.05, 0.95, after: 0.15)
+    #expect(events.last == .doubleTapped(.topLeft))
+}
+
+@Test func nothingStartsWhileTyping() {
+    var d = Driver()
+    d.typing = true
+    #expect(d.frames([finger(0.97, 0.3), finger(0.97, 0.4), []]).isEmpty)
+    d.typing = false
+    #expect(d.frames([finger(0.97, 0.3), finger(0.97, 0.4), []]).first == .began(.right))
 }
 
 private func totalDelta(_ events: [GestureEvent]) -> Double {

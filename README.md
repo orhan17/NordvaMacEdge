@@ -149,6 +149,11 @@ A frame goes: trackpad → `TouchSource` → `GestureEngine` → `EdgeGestureRec
   pointer move covered the 2.5% in a split second. Real slides lasted 0.45 s or more, so a
   side slide now starts only once the touch is 0.2 s old, and the travel made while waiting
   is applied at once, so nothing is lost.
+- **Palms and thumbs are not fingers.** The trackpad reports every contact, including the ones
+  macOS ignores. Logged false triggers came from a palm on the right edge (contact 14-23 long,
+  fingertips are 6.6-9.2) and from thumbs brushing the top border while typing, which once added
+  up to a corner double-tap. Now contacts longer than 11 are ignored, touches that land on the
+  very top border are ignored, and nothing starts within 0.5 s of a key press (with Accessibility access).
 - **The app switcher needs a slow slide.** People often start moving the pointer from
   the bottom of the trackpad, so a fast move there is treated as the pointer. Speed is
   measured from the moment the finger starts moving, not from the touch: "put the finger

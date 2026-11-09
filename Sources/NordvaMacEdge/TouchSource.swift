@@ -57,7 +57,9 @@ private let contactCallback: ContactCallback = { _, touches, count, timestamp, _
             points.append(TouchPoint(
                 id: touch.identifier,
                 x: Double(touch.normalized.position.x),
-                y: Double(touch.normalized.position.y)
+                y: Double(touch.normalized.position.y),
+                size: Double(touch.size),
+                majorAxis: Double(touch.majorAxis)
             ))
         }
     }

@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var clickBlocker: ClickBlocker?
     private var watchdog: Timer?
     private var permissionPoll: Timer?
+    private var keyMonitor: Any?
 
     private lazy var settingsWindow = SettingsWindowController(
         settings: settings,
@@ -71,6 +72,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Log.debug("accessibility: \(ClickBlocker.hasPermission ? "granted" : "not granted")")
         if !ClickBlocker.hasPermission, settings.appSwitcher {
             askPermission()
+        }
+
+        // Global key events arrive only with Accessibility access; without it this stays silent.
+        keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak engine] _ in
+            engine?.noteKeyPress()
         }
 
         watchdog = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak engine] _ in

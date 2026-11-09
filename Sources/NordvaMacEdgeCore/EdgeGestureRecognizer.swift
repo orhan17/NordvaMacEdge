@@ -24,11 +24,16 @@ public struct TouchPoint: Equatable, Sendable {
     public let id: Int32
     public let x: Double
     public let y: Double
+    /// Contact size and the long axis of the contact ellipse, as the trackpad reports them.
+    public let size: Double
+    public let majorAxis: Double
 
-    public init(id: Int32, x: Double, y: Double) {
+    public init(id: Int32, x: Double, y: Double, size: Double = 0, majorAxis: Double = 0) {
         self.id = id
         self.x = x
         self.y = y
+        self.size = size
+        self.majorAxis = majorAxis
     }
 }
 
@@ -59,6 +64,11 @@ public struct EdgeGestureRecognizer: Sendable {
         /// A quick brush past the edge moves a couple of millimeters in a fraction of a second;
         /// a real slide lasts longer. Side slides start only once the touch is this old.
         public var minSideSlideAge: Double = 0.2
+        /// Fingertips measured 6.6-9.2 here, a palm or the side of the hand resting on the
+        /// edge 14-23, so anything longer than this is not a finger.
+        public var maxFingerAxis: Double = 11
+        /// Touches that land on the very top border are thumbs brushing it from the keyboard.
+        public var topBorder: Double = 0.985
         public var cornerWidth: Double = 0.12
         public var cornerHeight: Double = 0.2
         public var maxTapDuration: Double = 0.3
@@ -123,12 +133,13 @@ public struct EdgeGestureRecognizer: Sendable {
     public mutating func process(
         _ touches: [TouchPoint],
         at time: Double,
-        isButtonDown: @autoclosure () -> Bool
+        isButtonDown: @autoclosure () -> Bool,
+        isTyping: Bool = false
     ) -> [GestureEvent] {
         switch state {
         case .idle:
             guard let touch = touches.first else { return [] }
-            if touches.count == 1 {
+            if touches.count == 1, !isTyping, !isPalm(touch), touch.y < config.topBorder {
                 let edge = edge(atX: touch.x)
                 let corner = corner(at: touch)
                 let bottom = config.bottomEdgeEnabled && touch.y <= config.bottomHeight
@@ -154,7 +165,9 @@ public struct EdgeGestureRecognizer: Sendable {
                 state = .idle
                 return finishTap(candidate, at: time)
             }
-            guard touches.count == 1, let touch = touches.first, touch.id == candidate.id, !isButtonDown() else {
+            guard touches.count == 1, let touch = touches.first, touch.id == candidate.id, !isPalm(touch),
+                  !isButtonDown()
+            else {
                 lastTap = nil
                 state = .ignoring
                 return []
@@ -182,7 +195,7 @@ public struct EdgeGestureRecognizer: Sendable {
             return []
 
         case let .active(edge, id, last):
-            guard touches.count == 1, let touch = touches.first, touch.id == id else {
+            guard touches.count == 1, let touch = touches.first, touch.id == id, !isPalm(touch) else {
                 state = touches.isEmpty ? .idle : .ignoring
                 return [.ended(edge)]
             }
@@ -213,6 +226,10 @@ public struct EdgeGestureRecognizer: Sendable {
     private func speedSinceAnchor(_ candidate: Candidate, x: Double, at time: Double) -> Double {
         let elapsed = max(time - candidate.anchorTime, 0.001)
         return abs(x - candidate.anchorX) / elapsed
+    }
+
+    private func isPalm(_ touch: TouchPoint) -> Bool {
+        touch.majorAxis > config.maxFingerAxis
     }
 
     private func edge(atX x: Double) -> Edge? {
