@@ -86,6 +86,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         clickBlocker = ClickBlocker { [weak engine] in engine?.shouldSuppressClick() ?? false }
         clickBlocker?.start()
         updatePermissionItem()
+        Log.debug("accessibility: \(ClickBlocker.hasPermission ? "granted" : "not granted")")
+        if !ClickBlocker.hasPermission, defaults.bool(forKey: Keys.appSwitcher) {
+            askPermission()
+        }
 
         watchdog = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak engine] _ in
             engine?.releaseIfStalled()
