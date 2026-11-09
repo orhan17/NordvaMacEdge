@@ -8,6 +8,31 @@ brightness. Double-tap a corner for quick actions, or slide slowly along the bot
 edge to switch apps. No reaching for the keyboard or Control Center - your hand stays
 on the trackpad.
 
+## Install
+
+Works on any MacBook with macOS 13 Ventura or later, Apple Silicon or Intel. No coding needed.
+
+1. **Download** `NordvaMacEdge.zip` from the [latest release](https://github.com/orhan17/NordvaMacEdge/releases/latest).
+2. **Unzip** it (double-click the file in Downloads) and **drag `NordvaMacEdge.app` into Applications**.
+3. **Open it.** The first time, macOS says it could not verify the app: the app is free and
+   not registered with Apple, which costs developers $99 a year. Click **Done**, then go to
+   **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to
+   NordvaMacEdge, and confirm with your password or Touch ID. This is needed only once.
+4. **Allow access.** A slider icon appears in the menu bar at the top of the screen, and macOS
+   asks for Accessibility access. Click **Open System Settings** and turn **NordvaMacEdge** on.
+   This powers the app switcher and stops corner taps from also clicking; volume and
+   brightness work even without it.
+5. **Optional:** click the slider icon in the menu bar and turn on **Launch at Login**.
+
+That's it - slide a finger along the right edge of the trackpad and the volume follows.
+
+If macOS says the app "is damaged and can't be opened", open Terminal and run
+`xattr -dr com.apple.quarantine /Applications/NordvaMacEdge.app`, then open the app again.
+
+**To uninstall:** click the slider icon → **Quit**, then move NordvaMacEdge from Applications to the Trash.
+
+## Features
+
 - **Smooth.** The level follows your finger without lag, and an indicator appears at the edge of the screen.
 - **Stays out of your way.** Normal pointing, two-finger scrolling, clicking and dragging near the edges work as before: a gesture starts only when the finger lands right at the edge and moves along it.
 - **The pointer stays put** while a gesture is in progress.
@@ -29,31 +54,30 @@ the corners move with them: brightness is always the top corner on its side, sou
 the bottom corner on its side. The menu also lets you pause the app, turn the app
 switcher off, and launch at login.
 
-## Install
+## Build from source
 
 Only the Command Line Tools are required (`xcode-select --install`), full Xcode is optional.
 
 ```bash
 git clone https://github.com/orhan17/NordvaMacEdge.git
 cd NordvaMacEdge
-./build.sh --install
+./build.sh --install   # build, copy to /Applications and launch
 ```
 
-Then open the menu bar item, choose **Allow Access for App Switcher and Corners…** and enable NordvaMacEdge in
-System Settings → Privacy & Security → Accessibility. Accessibility access is needed for:
+Accessibility access (asked on first launch, or **Allow Access for App Switcher and
+Corners…** in the menu) is needed for:
 
 - **the app switcher** - macOS lets an app press Command+Tab only with this access;
   without it the bottom edge stays a regular trackpad;
 - **corner taps with "Tap to click" on** - otherwise macOS also turns the double-tap into
   a double-click wherever the pointer is.
 
-Volume and brightness sliders work without any permissions.
-
-## Development
+Other commands:
 
 ```bash
-./build.sh   # build build/NordvaMacEdge.app
-./test.sh    # gesture recognizer tests
+./build.sh         # build build/NordvaMacEdge.app
+./build.sh --zip   # universal build packed into build/NordvaMacEdge.zip for a release
+./test.sh          # gesture recognizer tests
 ```
 
 Debug flags:
@@ -128,9 +152,10 @@ A frame goes: trackpad → `TouchSource` → `GestureEngine` → `EdgeGestureRec
   key were never released, macOS would think Command is pressed until you press it on the
   keyboard. The app releases it when the finger lifts, when a second finger appears, before
   sleep and when touch frames stop.
-- **Access is lost after every rebuild.** The app is ad-hoc signed, and macOS ties the
-  permission to the signature. After `./build.sh --install`, turn NordvaMacEdge off and on
-  again in the Accessibility list.
+- **An ad-hoc signature loses Accessibility access on every rebuild.** macOS ties the grant
+  to the signature's designated requirement, which for ad-hoc signing is the hash of that
+  exact build. `build.sh` pins the requirement to the bundle id instead, so the grant survives
+  rebuilds. The trade-off: any app with the same bundle id would match it.
 - **A stuck pointer is the worst possible failure.** If frames stop in the middle of a gesture
   (sleep, device disconnect), the pointer would stop moving. So a watchdog checks every half
   second that frames are arriving and releases the pointer itself.
