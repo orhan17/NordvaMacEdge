@@ -1,9 +1,16 @@
 import Testing
 @testable import NordvaMacEdgeCore
 
+/// Most tests check gesture logic, not the brush filter, so side slides may start at once.
+private func instantSideSlides() -> EdgeGestureRecognizer.Config {
+    var config = EdgeGestureRecognizer.Config()
+    config.minSideSlideAge = 0
+    return config
+}
+
 /// Feeds frames 10 ms apart by default, like the real trackpad.
 private struct Driver {
-    var recognizer = EdgeGestureRecognizer()
+    var recognizer = EdgeGestureRecognizer(config: instantSideSlides())
     var time = 0.0
     var buttonDown = false
 
@@ -48,7 +55,7 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
     let events = d.frames([finger(0.97, 0.20), finger(0.97, 0.24), finger(0.97, 0.34), finger(0.97, 0.44), []])
     #expect(events.first == .began(.right))
     #expect(events.last == .ended(.right))
-    #expect(abs(totalDelta(events) - 0.20) < 0.0001)
+    #expect(abs(totalDelta(events) - 0.24) < 0.0001) // the whole travel from touch-down
 }
 
 @Test func slideDownOnLeftEdgeGivesNegativeDelta() {
@@ -94,7 +101,7 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
 
 @Test func secondFingerDuringSlideEndsIt() {
     var d = Driver()
-    #expect(d.frames([finger(0.97, 0.2), finger(0.97, 0.3)]) == [.began(.right)])
+    #expect(d.frames([finger(0.97, 0.2), finger(0.97, 0.3)]).first == .began(.right))
     let two = [TouchPoint(id: 1, x: 0.97, y: 0.4), TouchPoint(id: 2, x: 0.5, y: 0.2)]
     #expect(d.frame(two) == [.ended(.right)])
     #expect(d.frame(finger(0.97, 0.6)).isEmpty)
@@ -121,7 +128,39 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
 @Test func worksAgainAfterLift() {
     var d = Driver()
     _ = d.frames([finger(0.97, 0.2), finger(0.97, 0.4), []])
-    #expect(d.frames([finger(0.02, 0.4), finger(0.02, 0.6), []]) == [.began(.left), .ended(.left)])
+    #expect(d.frames([finger(0.02, 0.4), finger(0.02, 0.6), []])
+        == [.began(.left), .moved(.left, delta: 0.6 - 0.4), .ended(.left)])
+}
+
+// MARK: - Brushes past the edge
+
+/// The finger moves along y by `step` per 10 ms frame, then lifts.
+private func edgeStroke(x: Double = 0.985, from y: Double, step: Double, frames count: Int) -> [[TouchPoint]] {
+    [finger(x, y)] + (1...count).map { finger(x, y + step * Double($0)) } + [[]]
+}
+
+@Test func quickBrushAtTheEdgeLeavesTheVolumeAlone() {
+    // Like the logged false triggers: 0.1 s at the very edge, about 4 mm of travel.
+    var d = Driver()
+    d.recognizer = EdgeGestureRecognizer()
+    #expect(d.frames(edgeStroke(from: 0.30, step: 0.005, frames: 10)).isEmpty)
+}
+
+@Test func realSlideStartsAfterTheDelayWithoutLosingTravel() {
+    var d = Driver()
+    d.recognizer = EdgeGestureRecognizer()
+    let events = d.frames(edgeStroke(from: 0.30, step: 0.005, frames: 40))
+    #expect(events.first == .began(.right))
+    #expect(abs(totalDelta(events) - 0.2) < 0.0001)
+}
+
+@Test func sidewaysMoveDuringTheDelayStillFreesThePointer() {
+    var d = Driver()
+    d.recognizer = EdgeGestureRecognizer()
+    _ = d.frame(finger(0.97, 0.5))
+    #expect(d.holdsPointer)
+    #expect(d.frame(finger(0.90, 0.5)).isEmpty)
+    #expect(!d.holdsPointer)
 }
 
 @Test func disabledEdgeIsOrdinaryTrackpad() {
@@ -129,7 +168,8 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
     d.recognizer.config.enabledEdges = [.left]
     #expect(d.frames([finger(0.97, 0.2), finger(0.97, 0.4), []]).isEmpty)
     #expect(!d.holdsPointer)
-    #expect(d.frames([finger(0.02, 0.4), finger(0.02, 0.6), []]) == [.began(.left), .ended(.left)])
+    #expect(d.frames([finger(0.02, 0.4), finger(0.02, 0.6), []])
+        == [.began(.left), .moved(.left, delta: 0.6 - 0.4), .ended(.left)])
 }
 
 @Test func resetReleasesPointer() {

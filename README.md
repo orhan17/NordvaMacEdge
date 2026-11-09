@@ -144,6 +144,11 @@ A frame goes: trackpad → `TouchSource` → `GestureEngine` → `EdgeGestureRec
   would change every time you move the pointer up near the edge.
 - **A slide does not start immediately.** The finger has to travel 2.5% of the trackpad
   in a mostly vertical direction, so taps and sideways moves stay with the pointer.
+- **Quick brushes past the edge are ignored.** Logs showed the volume changing by a few
+  percent on its own: single touches at the very edge lasting 0.07-0.26 s, where a fast
+  pointer move covered the 2.5% in a split second. Real slides lasted 0.45 s or more, so a
+  side slide now starts only once the touch is 0.2 s old, and the travel made while waiting
+  is applied at once, so nothing is lost.
 - **The app switcher needs a slow slide.** People often start moving the pointer from
   the bottom of the trackpad, so a fast move there is treated as the pointer. Speed is
   measured from the moment the finger starts moving, not from the touch: "put the finger

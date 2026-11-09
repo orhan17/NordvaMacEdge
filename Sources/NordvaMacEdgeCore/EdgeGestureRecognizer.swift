@@ -56,6 +56,9 @@ public struct EdgeGestureRecognizer: Sendable {
         public var enabledEdges: Set<Edge> = [.left, .right]
         public var activationDistance: Double = 0.025
         public var verticalDominance: Double = 1.5
+        /// A quick brush past the edge moves a couple of millimeters in a fraction of a second;
+        /// a real slide lasts longer. Side slides start only once the touch is this old.
+        public var minSideSlideAge: Double = 0.2
         public var cornerWidth: Double = 0.12
         public var cornerHeight: Double = 0.2
         public var maxTapDuration: Double = 0.3
@@ -166,8 +169,10 @@ public struct EdgeGestureRecognizer: Sendable {
             guard max(dx, dy) >= config.activationDistance else { return [] }
             lastTap = nil
             if let edge = candidate.edge, dy >= dx * config.verticalDominance {
+                guard time - candidate.startTime >= config.minSideSlideAge else { return [] }
                 state = .active(edge: edge, id: candidate.id, last: touch.y)
-                return [.began(edge)]
+                // Apply the travel made while waiting, so the delay doesn't swallow part of the slide.
+                return [.began(edge), .moved(edge, delta: touch.y - candidate.startY)]
             }
             if candidate.bottom, dx >= dy, speedSinceAnchor(candidate, x: touch.x, at: time) <= config.maxBottomSpeed {
                 state = .active(edge: .bottom, id: candidate.id, last: touch.x)
