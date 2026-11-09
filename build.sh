@@ -22,6 +22,8 @@ else
     cp "$(swift build -c release --show-bin-path)/NordvaMacEdge" "$app/Contents/MacOS/"
 fi
 cp Resources/Info.plist "$app/Contents/"
+mkdir -p "$app/Contents/Resources"
+cp Resources/AppIcon.icns "$app/Contents/Resources/"
 
 # An ad-hoc signature's requirement is its cdhash, so every rebuild would lose the
 # Accessibility grant. Pinning the requirement to the bundle id keeps it across rebuilds.
