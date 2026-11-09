@@ -59,6 +59,10 @@ final class GestureEngine {
         lock.withLock { recognizer.config.activeCorners = corners }
     }
 
+    func setBottomEdgeEnabled(_ enabled: Bool) {
+        lock.withLock { recognizer.config.bottomEdgeEnabled = enabled }
+    }
+
     /// Спрашивает ClickBlocker на каждый клик.
     func shouldSuppressClick() -> Bool {
         lock.withLock { ProcessInfo.processInfo.systemUptime < suppressClicksUntil }

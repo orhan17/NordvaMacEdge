@@ -44,9 +44,9 @@ final class LevelController {
             Log.debug("начало жеста: край \(edge.rawValue), \(kind), уровень \(describe(level))")
             show(kind, at: edge, level: level)
 
-        case let .moved(edge, deltaY):
+        case let .moved(edge, delta):
             guard let current = level else { return }
-            let next = min(1, max(0, current + Float(deltaY) * sensitivity))
+            let next = min(1, max(0, current + Float(delta) * sensitivity))
             level = next
             // Границы отправляем всегда, иначе можно не дойти до ровных 0 или 100%.
             if abs(next - lastSubmitted) >= minimumStep || ((next == 0 || next == 1) && next != lastSubmitted) {

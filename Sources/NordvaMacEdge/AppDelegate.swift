@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private enum Keys {
         static let enabled = "enabled"
         static let swapEdges = "swapEdges"
+        static let appSwitcher = "appSwitcher"
     }
 
     private let demoHUD: Bool
@@ -20,15 +21,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private let enabledItem = NSMenuItem(title: "Включено", action: #selector(toggleEnabled), keyEquivalent: "")
     private let swapItem = NSMenuItem(title: "Поменять края местами", action: #selector(toggleSwap), keyEquivalent: "")
+    private let switcherItem = NSMenuItem(
+        title: "Переключение приложений снизу",
+        action: #selector(toggleSwitcher),
+        keyEquivalent: ""
+    )
     private let loginItem = NSMenuItem(title: "Запускать при входе", action: #selector(toggleLogin), keyEquivalent: "")
     private let permissionItem = NSMenuItem(
-        title: "Разрешить доступ, чтобы тап в углу не кликал…",
+        title: "Разрешить доступ для переключателя и углов…",
         action: #selector(askPermission),
         keyEquivalent: ""
     )
     private let statusLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let brightnessHint = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let volumeHint = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let switcherHint = NSMenuItem(
+        title: "Медленно вдоль нижнего края: выбор приложения",
+        action: nil,
+        keyEquivalent: ""
+    )
 
     private var swapped: Bool {
         defaults.bool(forKey: Keys.swapEdges)
@@ -50,7 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
-        defaults.register(defaults: [Keys.enabled: true, Keys.swapEdges: false])
+        defaults.register(defaults: [Keys.enabled: true, Keys.swapEdges: false, Keys.appSwitcher: true])
         setUpMenu()
 
         let levels = LevelController(hud: hud) { [defaults] edge in
@@ -58,10 +69,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let swapped = defaults.bool(forKey: Keys.swapEdges)
             return (edge == .right) != swapped ? .volume : .brightness
         }
-        let engine = GestureEngine(onEvent: levels.handle)
+        let switcher = AppSwitcher()
+        let engine = GestureEngine { event in
+            if event.edge == .bottom {
+                switcher.handle(event)
+            } else {
+                levels.handle(event)
+            }
+        }
         engine.isEnabled = defaults.bool(forKey: Keys.enabled)
         engine.setActiveCorners(activeCorners)
         self.engine = engine
+        updateBottomEdge()
 
         touches = TouchSource(onFrame: engine.process)
         startTouches()
@@ -118,11 +137,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             timer.invalidate()
             self.clickBlocker?.start()
             self.updatePermissionItem()
+            self.updateBottomEdge()
         }
     }
 
     private func updatePermissionItem() {
         permissionItem.isHidden = clickBlocker?.isRunning ?? false
+    }
+
+    /// Без доступа Command+Tab не нажать, поэтому нижний край остаётся обычным трекпадом.
+    private func updateBottomEdge() {
+        engine?.setBottomEdgeEnabled(defaults.bool(forKey: Keys.appSwitcher) && ClickBlocker.hasPermission)
     }
 
     // MARK: - Меню
@@ -137,7 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusLine.isEnabled = false
         statusLine.isHidden = true
         menu.addItem(statusLine)
-        for entry in [enabledItem, swapItem, loginItem] {
+        for entry in [enabledItem, swapItem, switcherItem, loginItem] {
             entry.target = self
             menu.addItem(entry)
         }
@@ -146,7 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(permissionItem)
 
         menu.addItem(.separator())
-        for hint in [brightnessHint, volumeHint] {
+        for hint in [brightnessHint, volumeHint, switcherHint] {
             hint.isEnabled = false
             menu.addItem(hint)
         }
@@ -161,8 +186,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         brightnessHint.title = "Двойной тап \(swapped ? "справа" : "слева") вверху: яркость на максимум"
         volumeHint.title = "Двойной тап \(swapped ? "слева" : "справа") внизу: звук вкл/выкл"
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        switcherItem.state = defaults.bool(forKey: Keys.appSwitcher) ? .on : .off
         if ClickBlocker.hasPermission { clickBlocker?.start() }
         updatePermissionItem()
+        updateBottomEdge()
+    }
+
+    @objc private func toggleSwitcher() {
+        defaults.set(!defaults.bool(forKey: Keys.appSwitcher), forKey: Keys.appSwitcher)
+        updateBottomEdge()
     }
 
     @objc private func toggleEnabled() {

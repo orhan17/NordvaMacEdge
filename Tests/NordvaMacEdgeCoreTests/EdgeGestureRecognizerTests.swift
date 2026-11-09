@@ -226,3 +226,83 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
     _ = d.frames([finger(0.03, 0.95), finger(0.03, 0.9), []])
     #expect(doubleTaps(d.tap(0.03, 0.95, after: 0.05)).isEmpty)
 }
+
+// MARK: - Нижний край, переключатель приложений
+
+private func bottomDriver() -> Driver {
+    var d = Driver()
+    d.recognizer.config.bottomEdgeEnabled = true
+    return d
+}
+
+/// Палец лежит `rest` секунд, потом едет по x с шагом `step` за кадр 10 мс.
+private func slide(
+    from x: Double, y: Double = 0.03, step: Double, frames count: Int, rest: Double = 0
+) -> [[TouchPoint]] {
+    let still = Array(repeating: finger(x, y), count: Int(rest / 0.01) + 1)
+    let moving = (1...count).map { finger(x + step * Double($0), y) }
+    return still + moving + [[]]
+}
+
+@Test func slowSlideAlongBottomOpensSwitcher() {
+    var d = bottomDriver()
+    // 0.002 за 10 мс = 0.2 ширины в секунду, около 3 см/с.
+    let events = d.frames(slide(from: 0.3, step: 0.002, frames: 60))
+    #expect(events.first == .began(.bottom))
+    #expect(events.last == .ended(.bottom))
+    #expect(totalDelta(events) > 0)
+}
+
+@Test func slowSlideLeftGivesNegativeDelta() {
+    var d = bottomDriver()
+    let events = d.frames(slide(from: 0.7, step: -0.002, frames: 60))
+    #expect(events.first == .began(.bottom))
+    #expect(totalDelta(events) < 0)
+}
+
+@Test func fastSlideAlongBottomIsCursor() {
+    var d = bottomDriver()
+    #expect(d.frames(slide(from: 0.3, step: 0.01, frames: 20)).isEmpty)
+}
+
+@Test func restThenFastSlideIsCursor() {
+    // Положил палец, подождал и резко повёл: скорость меряется от начала движения.
+    var d = bottomDriver()
+    #expect(d.frames(slide(from: 0.3, step: 0.01, frames: 20, rest: 0.4)).isEmpty)
+}
+
+@Test func restThenSlowSlideOpensSwitcher() {
+    var d = bottomDriver()
+    #expect(d.frames(slide(from: 0.3, step: 0.002, frames: 60, rest: 0.4)).first == .began(.bottom))
+}
+
+@Test func bottomEdgeIsOffByDefault() {
+    var d = Driver()
+    #expect(d.frames(slide(from: 0.3, step: 0.002, frames: 60)).isEmpty)
+}
+
+@Test func touchingBottomDoesNotHoldPointerUntilSwitcherStarts() {
+    var d = bottomDriver()
+    _ = d.frame(finger(0.3, 0.03))
+    #expect(!d.holdsPointer)
+    for i in 1...20 { _ = d.frame(finger(0.3 + 0.002 * Double(i), 0.03)) }
+    #expect(d.holdsPointer)
+}
+
+@Test func verticalFromBottomIsCursor() {
+    var d = bottomDriver()
+    let frames = (0...20).map { finger(0.5, 0.03 + 0.002 * Double($0)) } + [[]]
+    #expect(d.frames(frames).isEmpty)
+}
+
+@Test func bottomRightCornerStillTapsWithBottomEdgeOn() {
+    var d = bottomDriver()
+    let events = d.tap(0.95, 0.04) + d.tap(0.95, 0.04, after: 0.15)
+    #expect(doubleTaps(events) == [.bottomRight])
+}
+
+@Test func volumeSlideFromBottomRightStillWorks() {
+    var d = bottomDriver()
+    let frames = (0...20).map { finger(0.97, 0.03 + 0.01 * Double($0)) } + [[]]
+    #expect(d.frames(frames).first == .began(.right))
+}
