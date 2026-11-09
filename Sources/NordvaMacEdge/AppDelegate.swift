@@ -43,8 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         setUpMenu()
 
-        let levels = LevelController(hud: hud, settings: settings)
-        let switcher = AppSwitcher(settings: settings)
+        let haptics = Haptics(settings: settings)
+        let levels = LevelController(hud: hud, settings: settings, haptics: haptics)
+        let switcher = AppSwitcher(settings: settings, haptics: haptics)
         engine = GestureEngine { event in
             if event.edge == .bottom {
                 switcher.handle(event)

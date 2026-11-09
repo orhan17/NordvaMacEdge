@@ -11,6 +11,7 @@ final class LevelController {
     private let brightness = BrightnessControl()
     private let hud: HUD
     private let settings: Settings
+    private let haptics: Haptics
 
     private var sensitivity: Float = 1.6
     private var kind = LevelKind.volume
@@ -22,9 +23,10 @@ final class LevelController {
     private var pending: [LevelKind: Float] = [:]
     private var draining = false
 
-    init(hud: HUD, settings: Settings) {
+    init(hud: HUD, settings: Settings, haptics: Haptics) {
         self.hud = hud
         self.settings = settings
+        self.haptics = haptics
     }
 
     func handle(_ event: GestureEvent) {
@@ -41,6 +43,9 @@ final class LevelController {
             guard let current = level else { return }
             let next = min(1, max(0, current + Float(delta) * sensitivity))
             level = next
+            if let click = haptic(from: Double(current), to: Double(next)) {
+                haptics.play(click)
+            }
             if abs(next - lastSubmitted) >= minimumStep || ((next == 0 || next == 1) && next != lastSubmitted) {
                 submit(next, for: kind)
                 lastSubmitted = next

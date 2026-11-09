@@ -41,8 +41,9 @@ in the menu and switch it on again.
 ## Settings
 
 Click the slider icon in the menu bar → **Settings…** (or press ⌘, while the menu is open).
-Turn each gesture on or off, swap the sides, and tune how it feels: how far to slide for
-the full volume range, how far per app in the switcher and how slow the switcher slide must be.
+Turn each gesture on or off, swap the sides, switch the haptic clicks off, and tune how it
+feels: how far to slide for the full volume range, how far per app in the switcher and how
+slow the switcher slide must be.
 Distances are shown in centimeters of your own trackpad.
 
 <p align="center"><img src="docs/settings.png" width="460" alt="Settings window"></p>
@@ -52,6 +53,7 @@ Distances are shown in centimeters of your own trackpad.
 - **Smooth.** The level follows your finger without lag, and an indicator appears at the edge of the screen.
 - **Stays out of your way.** Normal pointing, two-finger scrolling, clicking and dragging near the edges work as before: a gesture starts only when the finger lands right at the edge and moves along it.
 - **The pointer stays put** while a gesture is in progress.
+- **You can feel it.** The trackpad clicks softly every 10%, a little firmer at 0 and 100%, and once for each app in the switcher, like a dial with notches.
 - **Lightweight.** No Dock icon, just a menu bar item and a settings window when you need it.
 - **Open source.** Plain Swift, no third-party dependencies, builds with one command.
 
@@ -121,6 +123,8 @@ The icon is drawn in code: `swift scripts/make-icon.swift` regenerates `Resource
 | `Sources/NordvaMacEdge/AppSwitcher.swift` | presses Command+Tab for the bottom edge |
 | `Sources/NordvaMacEdge/Controls.swift` | volume via CoreAudio, brightness via DisplayServices |
 | `Sources/NordvaMacEdge/HUD.swift` | the level indicator next to the screen edge |
+| `Sources/NordvaMacEdgeCore/LevelHaptics.swift` | decides when a level change should click |
+| `Sources/NordvaMacEdge/Haptics.swift` | plays the trackpad clicks |
 | `Sources/NordvaMacEdge/Settings.swift` | preferences, read by gesture code straight from UserDefaults |
 | `Sources/NordvaMacEdge/SettingsWindow.swift` | the SwiftUI settings window |
 

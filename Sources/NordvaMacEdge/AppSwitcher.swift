@@ -12,14 +12,16 @@ final class AppSwitcher {
     }
 
     private let settings: Settings
+    private let haptics: Haptics
     private let queue = DispatchQueue(label: "nordvamacedge.switcher")
     private let source = CGEventSource(stateID: .hidSystemState)
     private var step = 0.07
     private var travel = 0.0
     private var isOpen = false
 
-    init(settings: Settings) {
+    init(settings: Settings, haptics: Haptics) {
         self.settings = settings
+        self.haptics = haptics
     }
 
     func handle(_ event: GestureEvent) {
@@ -27,6 +29,7 @@ final class AppSwitcher {
         case .began:
             step = settings.switcherStep
             travel = 0
+            haptics.play(.detent)
             queue.async { [self] in open() }
         case let .moved(_, delta):
             travel += delta
@@ -40,6 +43,7 @@ final class AppSwitcher {
                 travel += step
             }
             if steps != 0 {
+                haptics.play(.detent)
                 queue.async { [self] in move(by: steps) }
             }
         case .ended:

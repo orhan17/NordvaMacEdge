@@ -69,6 +69,11 @@ private struct SettingsView: View {
             }
 
             Section("Feel") {
+                toggle(
+                    "Haptic feedback",
+                    detail: "A light trackpad click every 10%, at 0 and 100%, and for each app in the switcher",
+                    isOn: $settings.haptics
+                )
                 slider(
                     "Volume and brightness speed",
                     value: $settings.sensitivity,

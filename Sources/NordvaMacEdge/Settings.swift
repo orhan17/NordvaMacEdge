@@ -15,6 +15,7 @@ final class Settings: ObservableObject {
         static let sensitivity = "sensitivity"
         static let switcherStep = "switcherStep"
         static let switcherMaxSpeed = "switcherMaxSpeed"
+        static let haptics = "haptics"
     }
 
     static let sensitivityRange: ClosedRange<Double> = 0.8...3.0
@@ -31,6 +32,7 @@ final class Settings: ObservableObject {
         Key.sensitivity: 1.6,
         Key.switcherStep: 0.07,
         Key.switcherMaxSpeed: 0.5,
+        Key.haptics: true,
     ]
 
     private let store = UserDefaults.standard
@@ -84,6 +86,11 @@ final class Settings: ObservableObject {
     var switcherMaxSpeed: Double {
         get { store.double(forKey: Key.switcherMaxSpeed) }
         set { save(newValue, Key.switcherMaxSpeed) }
+    }
+
+    var haptics: Bool {
+        get { store.bool(forKey: Key.haptics) }
+        set { save(newValue, Key.haptics) }
     }
 
     var launchAtLogin: Bool {
