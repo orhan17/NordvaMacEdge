@@ -2,11 +2,7 @@ import CoreGraphics
 import Foundation
 import NordvaMacEdgeCore
 
-/// Связывает кадры трекпада, распознаватель и удержание курсора.
-/// `process` идёт на потоке трекпада, остальное на главном, отсюда блокировка.
 final class GestureEngine {
-    /// Сколько после тапа в углу гасить клики. Клик от «касания для клика» система
-    /// присылает сразу после отрыва пальца.
     private static let clickSuppressWindow = 0.35
 
     private let lock = NSLock()
@@ -42,7 +38,7 @@ final class GestureEngine {
 
         if Log.isEnabled, touches.count != previousTouchCount {
             let list = touches.map { String(format: "#%d x=%.3f y=%.3f", $0.id, $0.x, $0.y) }
-            Log.debug("пальцев \(touches.count): \(list.joined(separator: ", "))")
+            Log.debug("fingers \(touches.count): \(list.joined(separator: ", "))")
         }
         previousTouchCount = touches.count
 
@@ -63,24 +59,22 @@ final class GestureEngine {
         lock.withLock { recognizer.config.bottomEdgeEnabled = enabled }
     }
 
-    /// Спрашивает ClickBlocker на каждый клик.
     func shouldSuppressClick() -> Bool {
         lock.withLock { ProcessInfo.processInfo.systemUptime < suppressClicksUntil }
     }
 
-    /// Сброс перед сном и после него: кадры могли оборваться посреди жеста.
     func reset() {
         lock.withLock { finish() }
     }
 
-    /// Застрявший курсор это худшая поломка такого приложения: он просто перестанет
-    /// двигаться. Поэтому если кадры пропали посреди жеста, отпускаем его сами.
+    /// If frames stop mid-gesture (sleep, device gone), the pointer would stay frozen
+    /// and Command could stay pressed, so the gesture is ended here.
     func releaseIfStalled() {
         lock.withLock {
             guard recognizer.holdsPointer else { return }
             let elapsed = DispatchTime.now().uptimeNanoseconds - lastFrameAt.uptimeNanoseconds
             if elapsed > 1_000_000_000 {
-                Log.debug("кадры пропали посреди жеста, отпускаю курсор")
+                Log.debug("frames stopped mid-gesture, releasing the pointer")
                 finish()
             }
         }
@@ -91,9 +85,9 @@ final class GestureEngine {
             switch event {
             case let .tapped(corner):
                 suppressClicksUntil = ProcessInfo.processInfo.systemUptime + Self.clickSuppressWindow
-                Log.debug("тап: \(corner.rawValue)")
+                Log.debug("tap: \(corner.rawValue)")
             case let .doubleTapped(corner):
-                Log.debug("двойной тап: \(corner.rawValue)")
+                Log.debug("double-tap: \(corner.rawValue)")
             case .began, .moved, .ended:
                 break
             }
@@ -102,7 +96,6 @@ final class GestureEngine {
     }
 
     private func finish() {
-        // Пустой кадр корректно завершает начатый слайд.
         dispatch(recognizer.process([], at: lastTimestamp, isButtonDown: false))
         recognizer.reset()
         hold.update(hold: false)

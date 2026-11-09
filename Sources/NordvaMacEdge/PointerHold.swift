@@ -1,12 +1,8 @@
 import CoreGraphics
 import Foundation
 
-/// Держит курсор на месте, пока идёт жест.
-///
-/// MultitouchSupport только читает касания и не забирает их у системы, поэтому
-/// курсор поехал бы вместе с пальцем. Отвязка мыши от курсора официально работает
-/// только у активного приложения, поэтому на каждом кадре касания курсор ещё и
-/// возвращается назад. Такой способ не требует разрешения Accessibility.
+/// MultitouchSupport only reads touches, so the pointer would move along with the finger.
+/// It is detached from the mouse and warped back on every frame while a gesture is held.
 final class PointerHold {
     private var heldAt: CGPoint?
     private var frames = 0
@@ -30,10 +26,9 @@ final class PointerHold {
             }
         } else if heldAt != nil {
             heldAt = nil
-            // Заодно сбрасывает паузу в 0,25 с, которую система ставит после перемещения
-            // курсора. Без этого курсор бы подвисал после каждого жеста.
+            // Also clears the 0.25 s input freeze macOS applies after a warp.
             CGAssociateMouseAndMouseCursorPosition(1)
-            Log.debug("курсор отпущен: кадров \(frames), макс. смещение \(String(format: "%.1f", maxDrift)) pt")
+            Log.debug("pointer released: \(frames) frames, max drift \(String(format: "%.1f", maxDrift)) pt")
         }
     }
 }

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Собирает build/NordvaMacEdge.app. С флагом --install кладёт его в /Applications и запускает.
+# Builds build/NordvaMacEdge.app. With --install, copies it to /Applications and launches it.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -11,12 +11,11 @@ mkdir -p "$app/Contents/MacOS"
 cp "$(swift build -c release --show-bin-path)/NordvaMacEdge" "$app/Contents/MacOS/"
 cp Resources/Info.plist "$app/Contents/"
 codesign --force --sign - "$app"
-echo "собрано: $app"
+echo "built: $app"
 
 if [[ "${1:-}" == "--install" ]]; then
     osascript -e 'quit app "NordvaMacEdge"' 2>/dev/null || true
-    # quit возвращается сразу, а старая копия закрывается не мгновенно. Если открыть
-    # новую раньше, macOS отдаст ошибку -600 и ничего не запустит.
+    # `quit` returns immediately; opening the new copy before the old one exits fails with -600.
     for _ in {1..50}; do
         pgrep -xq NordvaMacEdge || break
         sleep 0.1
@@ -25,5 +24,5 @@ if [[ "${1:-}" == "--install" ]]; then
     rm -rf /Applications/NordvaMacEdge.app
     cp -R "$app" /Applications/
     open /Applications/NordvaMacEdge.app
-    echo "установлено и запущено: /Applications/NordvaMacEdge.app"
+    echo "installed and launched: /Applications/NordvaMacEdge.app"
 fi

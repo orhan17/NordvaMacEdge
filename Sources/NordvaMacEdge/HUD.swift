@@ -1,8 +1,6 @@
 import AppKit
 import NordvaMacEdgeCore
 
-/// Индикатор уровня. Системный значок громкости сам не появится: он показывается
-/// только на нажатие клавиш, а мы меняем уровень напрямую.
 final class HUD {
     private static let size = NSSize(width: 46, height: 196)
     private static let margin: CGFloat = 14
@@ -26,7 +24,6 @@ final class HUD {
         panel.hasShadow = true
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
-        // Иначе индикатор не появится поверх полноэкранного приложения или на другом столе.
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
 
         let background = NSVisualEffectView(frame: NSRect(origin: .zero, size: Self.size))
@@ -60,7 +57,6 @@ final class HUD {
                 context.duration = 0.25
                 self?.panel.animator().alphaValue = 0
             }, completionHandler: {
-                // Пока индикатор гас, мог начаться новый жест.
                 guard let self, self.generation == shownGeneration else { return }
                 self.panel.orderOut(nil)
             })
@@ -112,7 +108,6 @@ private final class LevelBarView: NSView {
         NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).fill()
 
         guard level > 0 else { return }
-        // Минимальная высота, чтобы скругление на малых уровнях не сплющивалось.
         let height = max(bounds.height * CGFloat(level), bounds.width)
         let filled = NSRect(x: 0, y: 0, width: bounds.width, height: height)
         NSColor.labelColor.setFill()

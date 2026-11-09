@@ -1,2 +1,2 @@
-// SwiftPM требует хотя бы один исходник в C-таргете.
+// SwiftPM needs at least one source file in a C target.
 #include "CMultitouch.h"

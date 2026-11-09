@@ -1,9 +1,8 @@
 #!/bin/bash
-# У Command Line Tools без Xcode модуль Testing лежит вне стандартного пути,
-# поэтому его надо указать явно. С полным Xcode хватает просто swift test.
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Command Line Tools without Xcode keep the Testing module outside the default search path.
 flags=()
 if [[ "$(xcode-select -p)" == /Library/Developer/CommandLineTools ]]; then
     frameworks=/Library/Developer/CommandLineTools/Library/Developer/Frameworks

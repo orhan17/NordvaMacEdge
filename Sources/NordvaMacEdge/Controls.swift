@@ -9,13 +9,10 @@ enum LevelKind {
 }
 
 protocol LevelControl {
-    /// От 0 до 1. nil значит, что сейчас этим управлять нельзя.
     func read() -> Float?
     @discardableResult func write(_ level: Float) -> Bool
 }
 
-/// Громкость текущего устройства вывода. Устройство спрашиваем каждый раз,
-/// потому что наушники могут подключиться в любой момент.
 final class VolumeControl: LevelControl {
     private var volumeAddress = AudioObjectPropertyAddress(
         mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
@@ -57,11 +54,9 @@ final class VolumeControl: LevelControl {
         guard AudioObjectGetPropertyData(device, &volumeAddress, 0, nil, &size, &volume) == noErr else {
             return nil
         }
-        // Без этого звук при слайде вверх сразу прыгнул бы на старую громкость.
         return isMuted ? 0 : volume
     }
 
-    /// Переключает звук. Возвращает новое состояние или nil, если устройство не умеет mute.
     func toggleMute() -> Bool? {
         guard let device = outputDevice(), AudioObjectHasProperty(device, &muteAddress) else { return nil }
         var settable: DarwinBoolean = false
@@ -82,7 +77,6 @@ final class VolumeControl: LevelControl {
         let status = AudioObjectSetPropertyData(
             device, &volumeAddress, 0, nil, UInt32(MemoryLayout<Float32>.size), &volume
         )
-        // Сначала громкость, потом звук: иначе на долю секунды заиграет старый уровень.
         if status == noErr, level > 0, isMuted, AudioObjectHasProperty(device, &muteAddress) {
             var unmuted: UInt32 = 0
             AudioObjectSetPropertyData(device, &muteAddress, 0, nil, UInt32(MemoryLayout<UInt32>.size), &unmuted)
@@ -91,8 +85,7 @@ final class VolumeControl: LevelControl {
     }
 }
 
-/// Яркость встроенного экрана. Публичного API для этого у Apple нет,
-/// поэтому DisplayServices приватный. Внешние мониторы так не управляются.
+/// Built-in display only. There is no public API for brightness, so this uses the private DisplayServices.
 final class BrightnessControl: LevelControl {
     private typealias GetFunction = @convention(c) (UInt32, UnsafeMutablePointer<Float>) -> Int32
     private typealias SetFunction = @convention(c) (UInt32, Float) -> Int32

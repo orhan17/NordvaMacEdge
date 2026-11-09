@@ -1,7 +1,7 @@
 import Testing
 @testable import NordvaMacEdgeCore
 
-/// Подаёт кадры в распознаватель, по умолчанию с шагом 10 мс, как настоящий трекпад.
+/// Feeds frames 10 ms apart by default, like the real trackpad.
 private struct Driver {
     var recognizer = EdgeGestureRecognizer()
     var time = 0.0
@@ -16,7 +16,6 @@ private struct Driver {
         list.flatMap { frame($0) }
     }
 
-    /// Касание и отрыв. Возвращает события за весь тап.
     mutating func tap(_ x: Double, _ y: Double, after pause: Double = 0.01, holding: Double = 0.08) -> [GestureEvent] {
         frame(finger(x, y), after: pause) + frame([], after: holding)
     }
@@ -42,14 +41,14 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
     }
 }
 
-// MARK: - Слайд по краю
+// MARK: - Side edges
 
 @Test func slideUpOnRightEdge() {
     var d = Driver()
     let events = d.frames([finger(0.97, 0.20), finger(0.97, 0.24), finger(0.97, 0.34), finger(0.97, 0.44), []])
     #expect(events.first == .began(.right))
     #expect(events.last == .ended(.right))
-    #expect(abs(totalDelta(events) - 0.20) < 0.0001) // считаем от точки активации
+    #expect(abs(totalDelta(events) - 0.20) < 0.0001)
 }
 
 @Test func slideDownOnLeftEdgeGivesNegativeDelta() {
@@ -70,7 +69,6 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
     #expect(d.holdsPointer)
     #expect(d.frame(finger(0.90, 0.5)).isEmpty)
     #expect(!d.holdsPointer)
-    // И позже вертикальное движение жест уже не запускает.
     #expect(d.frame(finger(0.90, 0.9)).isEmpty)
 }
 
@@ -99,7 +97,6 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
     #expect(d.frames([finger(0.97, 0.2), finger(0.97, 0.3)]) == [.began(.right)])
     let two = [TouchPoint(id: 1, x: 0.97, y: 0.4), TouchPoint(id: 2, x: 0.5, y: 0.2)]
     #expect(d.frame(two) == [.ended(.right)])
-    // Оставшийся палец не должен снова запустить жест, пока все не поднимутся.
     #expect(d.frame(finger(0.97, 0.6)).isEmpty)
     #expect(!d.holdsPointer)
 }
@@ -134,7 +131,7 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
     #expect(!d.holdsPointer)
 }
 
-// MARK: - Тапы по углам
+// MARK: - Corner taps
 
 @Test func doubleTapTopLeft() {
     var d = Driver()
@@ -149,7 +146,6 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
 }
 
 @Test func inactiveCornersAreOrdinaryTrackpad() {
-    // По умолчанию слушаем только левый верхний и правый нижний.
     var d = Driver()
     let events = d.tap(0.03, 0.05) + d.tap(0.03, 0.05, after: 0.15)
         + d.tap(0.97, 0.95, after: 0.5) + d.tap(0.97, 0.95, after: 0.15)
@@ -166,7 +162,6 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
 }
 
 @Test func cornerIsWiderThanEdge() {
-    // x = 0.1 уже не край, но ещё угол.
     var d = Driver()
     let events = d.tap(0.10, 0.9) + d.tap(0.10, 0.9, after: 0.15)
     #expect(doubleTaps(events) == [.topLeft])
@@ -227,7 +222,7 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
     #expect(doubleTaps(d.tap(0.03, 0.95, after: 0.05)).isEmpty)
 }
 
-// MARK: - Нижний край, переключатель приложений
+// MARK: - Bottom edge app switcher
 
 private func bottomDriver() -> Driver {
     var d = Driver()
@@ -235,7 +230,7 @@ private func bottomDriver() -> Driver {
     return d
 }
 
-/// Палец лежит `rest` секунд, потом едет по x с шагом `step` за кадр 10 мс.
+/// The finger rests for `rest` seconds, then moves along x by `step` per 10 ms frame.
 private func slide(
     from x: Double, y: Double = 0.03, step: Double, frames count: Int, rest: Double = 0
 ) -> [[TouchPoint]] {
@@ -246,7 +241,6 @@ private func slide(
 
 @Test func slowSlideAlongBottomOpensSwitcher() {
     var d = bottomDriver()
-    // 0.002 за 10 мс = 0.2 ширины в секунду, около 3 см/с.
     let events = d.frames(slide(from: 0.3, step: 0.002, frames: 60))
     #expect(events.first == .began(.bottom))
     #expect(events.last == .ended(.bottom))
@@ -266,7 +260,6 @@ private func slide(
 }
 
 @Test func restThenFastSlideIsCursor() {
-    // Положил палец, подождал и резко повёл: скорость меряется от начала движения.
     var d = bottomDriver()
     #expect(d.frames(slide(from: 0.3, step: 0.01, frames: 20, rest: 0.4)).isEmpty)
 }

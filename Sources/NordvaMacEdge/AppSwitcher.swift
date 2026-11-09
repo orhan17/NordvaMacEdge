@@ -2,14 +2,8 @@ import CoreGraphics
 import Foundation
 import NordvaMacEdgeCore
 
-/// Переключение приложений медленным слайдом по нижнему краю.
-///
-/// Нажимает настоящий Command+Tab, поэтому выглядит и работает как системный
-/// переключатель: палец вправо - следующее приложение, влево - предыдущее,
-/// отрыв пальца - переключиться. Нажимать клавиши за пользователя macOS позволяет
-/// только с доступом Accessibility, без него события молча теряются.
-///
-/// `handle` вызывается под замком GestureEngine, поэтому счётчик без своего замка.
+/// Presses the real Command+Tab: right for the next app, left for the previous one,
+/// lift to switch. Posting key events requires Accessibility access.
 final class AppSwitcher {
     private enum Key {
         static let command: CGKeyCode = 0x37
@@ -17,7 +11,6 @@ final class AppSwitcher {
         static let tab: CGKeyCode = 0x30
     }
 
-    /// Сколько ширины трекпада на одно приложение, около 1 см.
     private let step = 0.07
 
     private let queue = DispatchQueue(label: "nordvamacedge.switcher")
@@ -53,10 +46,9 @@ final class AppSwitcher {
 
     private func open() {
         post(Key.command, down: true, flags: .maskCommand)
-        // Как у настоящего Command+Tab: сразу выделено следующее приложение.
         tab(forward: true)
         isOpen = true
-        Log.debug("переключатель открыт")
+        Log.debug("app switcher opened")
     }
 
     private func move(by steps: Int) {
@@ -68,11 +60,11 @@ final class AppSwitcher {
 
     private func close() {
         guard isOpen else { return }
-        // Отпущенный Command и есть «переключиться». Если его не отпустить, система
-        // будет считать, что Command зажат, пока его не нажмут на клавиатуре.
+        // Must always run: a synthetic Command that is never released stays "pressed"
+        // for the whole system until the real key is pressed.
         post(Key.command, down: false, flags: [])
         isOpen = false
-        Log.debug("переключатель закрыт")
+        Log.debug("app switcher closed")
     }
 
     private func tab(forward: Bool) {

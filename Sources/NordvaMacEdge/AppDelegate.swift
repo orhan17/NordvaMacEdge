@@ -19,16 +19,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var watchdog: Timer?
     private var permissionPoll: Timer?
 
-    private let enabledItem = NSMenuItem(title: "Включено", action: #selector(toggleEnabled), keyEquivalent: "")
-    private let swapItem = NSMenuItem(title: "Поменять края местами", action: #selector(toggleSwap), keyEquivalent: "")
+    private let enabledItem = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
+    private let swapItem = NSMenuItem(title: "Swap Edges", action: #selector(toggleSwap), keyEquivalent: "")
     private let switcherItem = NSMenuItem(
-        title: "Переключение приложений снизу",
+        title: "App Switcher on Bottom Edge",
         action: #selector(toggleSwitcher),
         keyEquivalent: ""
     )
-    private let loginItem = NSMenuItem(title: "Запускать при входе", action: #selector(toggleLogin), keyEquivalent: "")
+    private let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
     private let permissionItem = NSMenuItem(
-        title: "Разрешить доступ для переключателя и углов…",
+        title: "Allow Access for App Switcher and Corners…",
         action: #selector(askPermission),
         keyEquivalent: ""
     )
@@ -36,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let brightnessHint = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let volumeHint = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let switcherHint = NSMenuItem(
-        title: "Медленно вдоль нижнего края: выбор приложения",
+        title: "Slide slowly along the bottom edge: switch apps",
         action: nil,
         keyEquivalent: ""
     )
@@ -45,7 +45,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         defaults.bool(forKey: Keys.swapEdges)
     }
 
-    /// Углы едут вместе с краями: яркость сверху на своей стороне, звук снизу на своей.
     private var activeCorners: Set<Corner> {
         swapped ? [.topRight, .bottomLeft] : [.topLeft, .bottomRight]
     }
@@ -65,7 +64,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setUpMenu()
 
         let levels = LevelController(hud: hud) { [defaults] edge in
-            // По умолчанию как в Slidr: справа громкость, слева яркость.
             let swapped = defaults.bool(forKey: Keys.swapEdges)
             return (edge == .right) != swapped ? .volume : .brightness
         }
@@ -93,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             engine?.releaseIfStalled()
         }
 
-        // После сна устройство перестаёт присылать кадры, его надо пересоздавать.
+        // The trackpad stops sending frames after sleep, so the device is recreated on wake.
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(self, selector: #selector(willSleep), name: NSWorkspace.willSleepNotification, object: nil)
         center.addObserver(self, selector: #selector(didWake), name: NSWorkspace.didWakeNotification, object: nil)
@@ -104,13 +102,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         touches?.stop()
     }
 
-    // MARK: - Трекпад
-
     private func startTouches() {
         let started = touches?.start() ?? false
         statusLine.isHidden = started
-        statusLine.title = "Трекпад недоступен"
-        Log.debug(started ? "готов к жестам" : "трекпад недоступен")
+        statusLine.title = "Trackpad unavailable"
+        Log.debug(started ? "ready for gestures" : "trackpad unavailable")
     }
 
     @objc private func willSleep() {
@@ -119,18 +115,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func didWake() {
-        // Сразу после пробуждения устройство может быть ещё не готово.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
             self?.engine?.reset()
             self?.startTouches()
         }
     }
 
-    // MARK: - Доступ для гашения кликов
-
     @objc private func askPermission() {
         ClickBlocker.requestPermission()
-        // Система не сообщает, когда доступ выдали, поэтому проверяем сами.
         permissionPoll?.invalidate()
         permissionPoll = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] timer in
             guard let self, ClickBlocker.hasPermission else { return }
@@ -145,12 +137,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         permissionItem.isHidden = clickBlocker?.isRunning ?? false
     }
 
-    /// Без доступа Command+Tab не нажать, поэтому нижний край остаётся обычным трекпадом.
     private func updateBottomEdge() {
         engine?.setBottomEdgeEnabled(defaults.bool(forKey: Keys.appSwitcher) && ClickBlocker.hasPermission)
     }
-
-    // MARK: - Меню
 
     private func setUpMenu() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -176,15 +165,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(hint)
         }
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Выйти", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         item.menu = menu
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         enabledItem.state = defaults.bool(forKey: Keys.enabled) ? .on : .off
         swapItem.state = swapped ? .on : .off
-        brightnessHint.title = "Двойной тап \(swapped ? "справа" : "слева") вверху: яркость на максимум"
-        volumeHint.title = "Двойной тап \(swapped ? "слева" : "справа") внизу: звук вкл/выкл"
+        brightnessHint.title = "Double-tap top \(swapped ? "right" : "left"): brightness to 100%"
+        volumeHint.title = "Double-tap bottom \(swapped ? "left" : "right"): mute or unmute"
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         switcherItem.state = defaults.bool(forKey: Keys.appSwitcher) ? .on : .off
         if ClickBlocker.hasPermission { clickBlocker?.start() }
@@ -217,14 +206,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         } catch {
             let alert = NSAlert()
-            alert.messageText = "Не получилось изменить автозапуск"
+            alert.messageText = "Could not change Launch at Login"
             alert.informativeText = error.localizedDescription
             NSApp.activate(ignoringOtherApps: true)
             alert.runModal()
         }
     }
-
-    // MARK: - Показ индикатора без трекпада
 
     private func runHUDDemo() {
         hud.show(kind: .volume, edge: .right, level: 0.65)

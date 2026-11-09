@@ -1,7 +1,6 @@
 import Foundation
 
-/// Проверка системных вызовов без пальцев на трекпаде. Двигает громкость и яркость
-/// на 1% и сразу возвращает обратно. Если звук выключен, запись пропускает: она бы его включила.
+/// `--check`: nudges volume and brightness by 1% and back. Skips the volume write when muted, since it would unmute.
 enum SelfCheck {
     static func run() -> Int32 {
         var failed = false
@@ -9,20 +8,20 @@ enum SelfCheck {
         let source = TouchSource(onFrame: { _, _ in })
         if let source, source.start() {
             source.stop()
-            print("трекпад: ок")
+            print("trackpad: ok")
         } else {
-            print("трекпад: НЕ РАБОТАЕТ")
+            print("trackpad: FAILED")
             failed = true
         }
 
         let volume = VolumeControl()
         if volume.isMuted {
-            print("громкость: звук выключен, запись не проверяю")
-        } else if !roundTrip(name: "громкость", control: volume) {
+            print("volume: muted, skipping the write check")
+        } else if !roundTrip(name: "volume", control: volume) {
             failed = true
         }
 
-        if !roundTrip(name: "яркость", control: BrightnessControl()) {
+        if !roundTrip(name: "brightness", control: BrightnessControl()) {
             failed = true
         }
 
@@ -31,7 +30,7 @@ enum SelfCheck {
 
     private static func roundTrip(name: String, control: LevelControl) -> Bool {
         guard let original = control.read() else {
-            print("\(name): НЕ ЧИТАЕТСЯ")
+            print("\(name): CANNOT READ")
             return false
         }
         let test = original >= 0.5 ? original - 0.01 : original + 0.01
@@ -44,8 +43,8 @@ enum SelfCheck {
 
         let applied = wrote && seen.map { abs($0 - test) < 0.005 } == true
         let back = restored.map { abs($0 - original) < 0.005 } == true
-        let describe = { (value: Float?) in value.map { String(format: "%.3f", $0) } ?? "нет" }
-        print("\(name): было \(describe(original)), записал \(describe(test)), прочитал \(describe(seen)), вернул \(describe(restored)) - \(applied && back ? "ок" : "НЕ РАБОТАЕТ")")
+        let describe = { (value: Float?) in value.map { String(format: "%.3f", $0) } ?? "none" }
+        print("\(name): was \(describe(original)), wrote \(describe(test)), read \(describe(seen)), restored \(describe(restored)) - \(applied && back ? "ok" : "FAILED")")
         return applied && back
     }
 }

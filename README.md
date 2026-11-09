@@ -39,7 +39,7 @@ cd NordvaMacEdge
 ./build.sh --install
 ```
 
-Then open the menu bar item, choose the access item and enable NordvaMacEdge in
+Then open the menu bar item, choose **Allow Access for App Switcher and Corners…** and enable NordvaMacEdge in
 System Settings → Privacy & Security → Accessibility. Accessibility access is needed for:
 
 - **the app switcher** - macOS lets an app press Command+Tab only with this access;
@@ -148,7 +148,6 @@ A frame goes: trackpad → `TouchSource` → `GestureEngine` → `EdgeGestureRec
 - built-in trackpad only, Magic Trackpad is not supported
 - built-in display brightness only, external monitors are not controlled by this API
 - with Accessibility access, a single tap in the two active corners does not click: those corners belong to gestures
-- the menu is in Russian for now
 - the app is ad-hoc signed, so a copy built on another Mac will not open without
   `xattr -dr com.apple.quarantine NordvaMacEdge.app`; building it yourself is easier
 

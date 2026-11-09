@@ -6,8 +6,6 @@ private typealias ContactCallback = @convention(c) (
     UnsafeMutableRawPointer?, UnsafeMutablePointer<MTTouch>?, Int32, Double, Int32
 ) -> Int32
 
-/// Функции загружаются через dlopen, а не линкуются: если Apple уберёт фреймворк,
-/// приложение покажет понятную ошибку, а не упадёт при старте.
 private struct MultitouchAPI {
     typealias CreateDefault = @convention(c) () -> UnsafeMutableRawPointer?
     typealias Register = @convention(c) (UnsafeMutableRawPointer, ContactCallback) -> Void
@@ -41,7 +39,7 @@ private struct MultitouchAPI {
     }
 }
 
-// C-колбэк не может ничего захватить, поэтому обработчик лежит в глобальной переменной.
+// A C callback cannot capture context, so the handler lives in a global.
 private var frameHandler: (([TouchPoint], Double) -> Void)?
 
 private let contactCallback: ContactCallback = { _, touches, count, timestamp, _ in
@@ -50,7 +48,6 @@ private let contactCallback: ContactCallback = { _, touches, count, timestamp, _
         points.reserveCapacity(Int(count))
         for index in 0..<Int(count) {
             let touch = touches[index]
-            // Палец, который завис над поверхностью или только что поднялся, не считаем.
             guard Int(touch.state) == MTTouchStateMakeTouch || Int(touch.state) == MTTouchStateTouching else {
                 continue
             }
@@ -65,13 +62,11 @@ private let contactCallback: ContactCallback = { _, touches, count, timestamp, _
     return 0
 }
 
-/// Сырые касания встроенного трекпада. Колбэк приходит примерно 100 раз в секунду
-/// на чужом потоке, поэтому внутри него нельзя делать ничего долгого.
+/// Raw touches from the built-in trackpad, ~100 frames per second on a background thread.
 final class TouchSource {
     private let api: MultitouchAPI
     private var device: UnsafeMutableRawPointer?
 
-    /// `onFrame` получает пальцы и время кадра в секундах.
     init?(onFrame: @escaping ([TouchPoint], Double) -> Void) {
         guard let api = MultitouchAPI() else { return nil }
         self.api = api
@@ -84,7 +79,7 @@ final class TouchSource {
         api.register(newDevice, contactCallback)
         let status = api.start(newDevice, 0)
         device = newDevice
-        Log.debug("трекпад запущен, статус \(status)")
+        Log.debug("trackpad started, status \(status)")
         return status == 0
     }
 
@@ -94,6 +89,6 @@ final class TouchSource {
         _ = api.stop(device)
         api.release(device)
         self.device = nil
-        Log.debug("трекпад остановлен")
+        Log.debug("trackpad stopped")
     }
 }

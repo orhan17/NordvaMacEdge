@@ -1,9 +1,9 @@
 #ifndef CMULTITOUCH_H
 #define CMULTITOUCH_H
 
-// MultitouchSupport.framework приватный: заголовка от Apple нет, раскладка
-// восстановлена сообществом. Если Apple её поменяет, координаты станут мусором,
-// поэтому размер структуры проверяется ещё при компиляции.
+// MultitouchSupport.framework is private and ships no header. This layout is
+// community-reverse-engineered; if Apple changes it, coordinates turn into garbage,
+// hence the size check below.
 
 typedef struct {
     float x;
@@ -22,7 +22,7 @@ typedef struct {
     int state;
     int fingerID;
     int handID;
-    MTVector2D normalized; // 0..1, начало координат в левом нижнем углу
+    MTVector2D normalized;
     float size;
     int unknown1;
     float angle;
@@ -33,9 +33,8 @@ typedef struct {
     float density;
 } MTTouch;
 
-_Static_assert(sizeof(MTTouch) == 96, "раскладка MTTouch не совпала с ожидаемой");
+_Static_assert(sizeof(MTTouch) == 96, "unexpected MTTouch layout");
 
-// Значения поля state: палец реально лежит на поверхности только в этих двух.
 enum {
     MTTouchStateMakeTouch = 3,
     MTTouchStateTouching = 4,

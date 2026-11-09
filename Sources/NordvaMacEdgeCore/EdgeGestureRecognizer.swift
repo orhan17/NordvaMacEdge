@@ -19,7 +19,7 @@ public enum Corner: String, Sendable, CaseIterable {
     }
 }
 
-/// Палец на трекпаде. x: 0 слева, 1 справа. y: 0 снизу, 1 сверху.
+/// Normalized trackpad position: x from 0 (left) to 1 (right), y from 0 (bottom) to 1 (top).
 public struct TouchPoint: Equatable, Sendable {
     public let id: Int32
     public let x: Double
@@ -34,16 +34,12 @@ public struct TouchPoint: Equatable, Sendable {
 
 public enum GestureEvent: Equatable, Sendable {
     case began(Edge)
-    /// Сдвиг вдоль края. Для боковых краёв это y, больше нуля - вверх.
-    /// Для нижнего это x, больше нуля - вправо.
+    /// Along the edge: y for the side edges (up is positive), x for the bottom edge (right is positive).
     case moved(Edge, delta: Double)
     case ended(Edge)
-    /// Короткое касание угла. Приходит на каждый тап, нужен, чтобы погасить клик,
-    /// который система сделает из этого касания при включённом «касании для клика».
     case tapped(Corner)
     case doubleTapped(Corner)
 
-    /// Край слайда, nil для тапов.
     public var edge: Edge? {
         switch self {
         case let .began(edge), let .moved(edge, _), let .ended(edge): return edge
@@ -52,42 +48,22 @@ public enum GestureEvent: Equatable, Sendable {
     }
 }
 
-/// Отличает слайд вдоль края и тапы по углам от обычного движения курсора.
-///
-/// Главная идея: решение принимается по тому, где палец КОСНУЛСЯ трекпада.
-/// Палец, который начал в центре и доехал до края, это просто курсор.
+/// Gestures are decided by where the finger landed, not where it is now: a finger that
+/// started in the middle and reached the edge is just the pointer.
 public struct EdgeGestureRecognizer: Sendable {
     public struct Config: Sendable {
-        /// Ширина зоны у края в долях ширины трекпада.
         public var edgeWidth: Double = 0.08
-        /// Сколько надо проехать, прежде чем принять решение. Меньше, и дрожание
-        /// пальца будет случайно запускать жест.
         public var activationDistance: Double = 0.025
-        /// Во сколько раз движение по y должно быть больше, чем по x. Координаты
-        /// нормированные, а трекпад шире, чем выше, поэтому 1.5 это примерно 45° в реальности.
         public var verticalDominance: Double = 1.5
-        /// Размер угловой зоны. По высоте доля больше, потому что трекпад ниже,
-        /// чем шире: так зона получается примерно квадратной, около 2 см.
         public var cornerWidth: Double = 0.12
         public var cornerHeight: Double = 0.2
-        /// Касание дольше этого уже не тап, а палец, который просто лежит.
         public var maxTapDuration: Double = 0.3
-        /// Сколько секунд может пройти от отрыва первого тапа до касания вторым.
         public var doubleTapInterval: Double = 0.4
-        /// Углы, которые слушаем. Остальные остаются обычной частью трекпада: клик
-        /// в них работает как всегда.
         public var activeCorners: Set<Corner> = [.topLeft, .bottomRight]
-        /// Нижний край для переключения приложений. Выключен по умолчанию: снизу
-        /// часто начинают вести обычный курсор, поэтому включаем, только когда есть
-        /// чем переключать (доступ Accessibility для Command+Tab).
         public var bottomEdgeEnabled = false
-        /// Высота нижней зоны в долях высоты трекпада, около 7 мм.
         public var bottomHeight: Double = 0.07
-        /// Быстрее этого вдоль нижнего края ведут курсор, а не выбирают приложение.
-        /// В долях ширины трекпада в секунду: 0.3 это примерно 4,5 см/с.
+        /// Trackpad widths per second, 0.3 is about 4.5 cm/s.
         public var maxBottomSpeed: Double = 0.3
-        /// Пока палец ближе этого к точке касания, он считается лежащим на месте.
-        /// От момента, когда он отсюда вышел, меряется скорость.
         public var stillRadius: Double = 0.006
 
         public init() {}
@@ -101,7 +77,6 @@ public struct EdgeGestureRecognizer: Sendable {
         let startX: Double
         let startY: Double
         let startTime: Double
-        /// Последняя точка, где палец ещё лежал на месте.
         var anchorX: Double
         var anchorTime: Double
     }
@@ -113,29 +88,21 @@ public struct EdgeGestureRecognizer: Sendable {
 
     private enum State: Equatable, Sendable {
         case idle
-        /// Эти пальцы не наши, ждём, пока все поднимутся.
         case ignoring
-        /// Палец коснулся края или угла, но ещё не понятно, что это будет.
         case candidate(Candidate)
-        /// `last` это последняя позиция вдоль края: y для боковых, x для нижнего.
         case active(edge: Edge, id: Int32, last: Double)
     }
 
-    /// Можно менять на ходу, например когда края поменяли местами.
     public var config: Config
     private var state: State = .idle
-    /// Первый тап возможного двойного.
     private var lastTap: Tap?
 
     public init(config: Config = Config()) {
         self.config = config
     }
 
-    /// Пока true, курсор надо держать на месте: иначе он уедет ещё до того,
-    /// как станет понятно, жест это или нет.
-    ///
-    /// Касание только нижнего края курсор не держит: снизу часто начинают вести
-    /// обычный курсор, и он не должен подтормаживать, пока идёт решение.
+    /// A touch on the bottom edge alone does not hold the pointer, so normal pointing
+    /// that starts there never stutters while the gesture is being decided.
     public var holdsPointer: Bool {
         switch state {
         case let .candidate(candidate): return candidate.edge != nil || candidate.corner != nil
@@ -149,8 +116,6 @@ public struct EdgeGestureRecognizer: Sendable {
         lastTap = nil
     }
 
-    /// `time` в секундах, нужен для тапов. `isButtonDown` ленивый: состояние кнопки
-    /// нужно только в момент решения.
     public mutating func process(
         _ touches: [TouchPoint],
         at time: Double,
@@ -185,7 +150,6 @@ public struct EdgeGestureRecognizer: Sendable {
                 state = .idle
                 return finishTap(candidate, at: time)
             }
-            // Второй палец значит скролл или ладонь, зажатая кнопка значит клик или перетаскивание.
             guard touches.count == 1, let touch = touches.first, touch.id == candidate.id, !isButtonDown() else {
                 lastTap = nil
                 state = .ignoring
@@ -199,19 +163,15 @@ public struct EdgeGestureRecognizer: Sendable {
                 state = .candidate(candidate)
             }
             guard max(dx, dy) >= config.activationDistance else { return [] }
-            // Палец сдвинулся, значит это уже не тап.
             lastTap = nil
-            // Вертикально от бокового края - громкость или яркость.
             if let edge = candidate.edge, dy >= dx * config.verticalDominance {
                 state = .active(edge: edge, id: candidate.id, last: touch.y)
                 return [.began(edge)]
             }
-            // Медленно и горизонтально от нижнего края - переключатель приложений.
             if candidate.bottom, dx >= dy, speedSinceAnchor(candidate, x: touch.x, at: time) <= config.maxBottomSpeed {
                 state = .active(edge: .bottom, id: candidate.id, last: touch.x)
                 return [.began(.bottom)]
             }
-            // Всё остальное отдаём курсору.
             state = .ignoring
             return []
 
@@ -235,7 +195,6 @@ public struct EdgeGestureRecognizer: Sendable {
         if let previous = lastTap,
            previous.corner == corner,
            candidate.startTime - previous.endTime <= config.doubleTapInterval {
-            // Третий тап начнёт новую пару, а не сработает ещё раз.
             lastTap = nil
             return [.tapped(corner), .doubleTapped(corner)]
         }
@@ -243,8 +202,8 @@ public struct EdgeGestureRecognizer: Sendable {
         return [.tapped(corner)]
     }
 
-    /// Скорость от момента, когда палец сдвинулся с места, а не от касания:
-    /// иначе «положил палец, подождал и резко повёл курсор» считалось бы медленным.
+    /// Measured from when the finger left its resting spot, not from touch-down: otherwise
+    /// "rest, then move fast" would count as slow and open the app switcher.
     private func speedSinceAnchor(_ candidate: Candidate, x: Double, at time: Double) -> Double {
         let elapsed = max(time - candidate.anchorTime, 0.001)
         return abs(x - candidate.anchorX) / elapsed
