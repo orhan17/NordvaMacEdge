@@ -124,6 +124,14 @@ private func doubleTaps(_ events: [GestureEvent]) -> [Corner] {
     #expect(d.frames([finger(0.02, 0.4), finger(0.02, 0.6), []]) == [.began(.left), .ended(.left)])
 }
 
+@Test func disabledEdgeIsOrdinaryTrackpad() {
+    var d = Driver()
+    d.recognizer.config.enabledEdges = [.left]
+    #expect(d.frames([finger(0.97, 0.2), finger(0.97, 0.4), []]).isEmpty)
+    #expect(!d.holdsPointer)
+    #expect(d.frames([finger(0.02, 0.4), finger(0.02, 0.6), []]) == [.began(.left), .ended(.left)])
+}
+
 @Test func resetReleasesPointer() {
     var d = Driver()
     _ = d.frame(finger(0.97, 0.2))
@@ -262,6 +270,16 @@ private func slide(
 @Test func restThenFastSlideIsCursor() {
     var d = bottomDriver()
     #expect(d.frames(slide(from: 0.3, step: 0.01, frames: 20, rest: 0.4)).isEmpty)
+}
+
+@Test func slowSlideStartingHigherInTheBottomZoneOpensSwitcher() {
+    var d = bottomDriver()
+    #expect(d.frames(slide(from: 0.3, y: 0.14, step: 0.002, frames: 60)).first == .began(.bottom))
+}
+
+@Test func slowSlideAboveTheBottomZoneIsCursor() {
+    var d = bottomDriver()
+    #expect(d.frames(slide(from: 0.3, y: 0.2, step: 0.002, frames: 60)).isEmpty)
 }
 
 @Test func restThenSlowSlideOpensSwitcher() {

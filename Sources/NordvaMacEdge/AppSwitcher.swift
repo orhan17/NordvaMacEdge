@@ -11,16 +11,21 @@ final class AppSwitcher {
         static let tab: CGKeyCode = 0x30
     }
 
-    private let step = 0.07
-
+    private let settings: Settings
     private let queue = DispatchQueue(label: "nordvamacedge.switcher")
     private let source = CGEventSource(stateID: .hidSystemState)
+    private var step = 0.07
     private var travel = 0.0
     private var isOpen = false
+
+    init(settings: Settings) {
+        self.settings = settings
+    }
 
     func handle(_ event: GestureEvent) {
         switch event {
         case .began:
+            step = settings.switcherStep
             travel = 0
             queue.async { [self] in open() }
         case let .moved(_, delta):

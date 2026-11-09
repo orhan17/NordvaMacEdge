@@ -36,9 +36,9 @@ final class GestureEngine {
         lastTimestamp = timestamp
         guard enabled else { return }
 
-        if Log.isEnabled, touches.count != previousTouchCount {
+        if Log.isEnabled, Log.traceFrames || touches.count != previousTouchCount {
             let list = touches.map { String(format: "#%d x=%.3f y=%.3f", $0.id, $0.x, $0.y) }
-            Log.debug("fingers \(touches.count): \(list.joined(separator: ", "))")
+            Log.debug(String(format: "t=%.3f ", timestamp) + "fingers \(touches.count): \(list.joined(separator: ", "))")
         }
         previousTouchCount = touches.count
 
@@ -51,12 +51,8 @@ final class GestureEngine {
         dispatch(events)
     }
 
-    func setActiveCorners(_ corners: Set<Corner>) {
-        lock.withLock { recognizer.config.activeCorners = corners }
-    }
-
-    func setBottomEdgeEnabled(_ enabled: Bool) {
-        lock.withLock { recognizer.config.bottomEdgeEnabled = enabled }
+    func configure(_ change: (inout EdgeGestureRecognizer.Config) -> Void) {
+        lock.withLock { change(&recognizer.config) }
     }
 
     func shouldSuppressClick() -> Bool {

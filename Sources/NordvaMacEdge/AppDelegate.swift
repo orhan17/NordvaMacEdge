@@ -1,16 +1,9 @@
 import AppKit
 import NordvaMacEdgeCore
-import ServiceManagement
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private enum Keys {
-        static let enabled = "enabled"
-        static let swapEdges = "swapEdges"
-        static let appSwitcher = "appSwitcher"
-    }
-
     private let demoHUD: Bool
-    private let defaults = UserDefaults.standard
+    private let settings = Settings()
     private let hud = HUD()
     private var statusItem: NSStatusItem?
     private var engine: GestureEngine?
@@ -19,38 +12,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var watchdog: Timer?
     private var permissionPoll: Timer?
 
-    private let enabledItem = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
-    private let swapItem = NSMenuItem(title: "Swap Edges", action: #selector(toggleSwap), keyEquivalent: "")
-    private let switcherItem = NSMenuItem(
-        title: "App Switcher on Bottom Edge",
-        action: #selector(toggleSwitcher),
-        keyEquivalent: ""
+    private lazy var settingsWindow = SettingsWindowController(
+        settings: settings,
+        surfaceSize: { [weak self] in self?.touches?.surfaceSize },
+        requestAccess: { [weak self] in self?.askPermission() }
     )
-    private let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
+
+    private let enabledItem = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
+    private let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
     private let permissionItem = NSMenuItem(
         title: "Allow Access for App Switcher and Corners…",
         action: #selector(askPermission),
         keyEquivalent: ""
     )
     private let statusLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-    private let brightnessHint = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-    private let volumeHint = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-    private let switcherHint = NSMenuItem(
-        title: "Slide slowly along the bottom edge: switch apps",
-        action: nil,
-        keyEquivalent: ""
-    )
 
-    private var swapped: Bool {
-        defaults.bool(forKey: Keys.swapEdges)
-    }
+    private let snapshotPath: String?
 
-    private var activeCorners: Set<Corner> {
-        swapped ? [.topRight, .bottomLeft] : [.topLeft, .bottomRight]
-    }
-
-    init(demoHUD: Bool) {
+    init(demoHUD: Bool, snapshotPath: String?) {
         self.demoHUD = demoHUD
+        self.snapshotPath = snapshotPath
         super.init()
     }
 
@@ -60,34 +41,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
-        defaults.register(defaults: [Keys.enabled: true, Keys.swapEdges: false, Keys.appSwitcher: true])
         setUpMenu()
 
-        let levels = LevelController(hud: hud) { [defaults] edge in
-            let swapped = defaults.bool(forKey: Keys.swapEdges)
-            return (edge == .right) != swapped ? .volume : .brightness
-        }
-        let switcher = AppSwitcher()
-        let engine = GestureEngine { event in
+        let levels = LevelController(hud: hud, settings: settings)
+        let switcher = AppSwitcher(settings: settings)
+        engine = GestureEngine { event in
             if event.edge == .bottom {
                 switcher.handle(event)
             } else {
                 levels.handle(event)
             }
         }
-        engine.isEnabled = defaults.bool(forKey: Keys.enabled)
-        engine.setActiveCorners(activeCorners)
-        self.engine = engine
-        updateBottomEdge()
+        settings.onChange = { [weak self] in self?.applySettings() }
+        applySettings()
 
-        touches = TouchSource(onFrame: engine.process)
+        touches = TouchSource(onFrame: { [weak engine] touches, time in engine?.process(touches, at: time) })
         startTouches()
+
+        if let snapshotPath {
+            settingsWindow.snapshot(to: URL(fileURLWithPath: snapshotPath))
+            NSApp.terminate(nil)
+            return
+        }
 
         clickBlocker = ClickBlocker { [weak engine] in engine?.shouldSuppressClick() ?? false }
         clickBlocker?.start()
         updatePermissionItem()
         Log.debug("accessibility: \(ClickBlocker.hasPermission ? "granted" : "not granted")")
-        if !ClickBlocker.hasPermission, defaults.bool(forKey: Keys.appSwitcher) {
+        if !ClickBlocker.hasPermission, settings.appSwitcher {
             askPermission()
         }
 
@@ -104,6 +85,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         engine?.reset()
         touches?.stop()
+    }
+
+    private func applySettings() {
+        guard let engine else { return }
+        if engine.isEnabled != settings.enabled {
+            engine.isEnabled = settings.enabled
+        }
+        let settings = settings
+        engine.configure { config in
+            config.enabledEdges = settings.enabledSideEdges
+            config.activeCorners = settings.activeCorners
+            config.bottomEdgeEnabled = settings.appSwitcher && ClickBlocker.hasPermission
+            config.maxBottomSpeed = settings.switcherMaxSpeed
+        }
     }
 
     private func startTouches() {
@@ -133,16 +128,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             timer.invalidate()
             self.clickBlocker?.start()
             self.updatePermissionItem()
-            self.updateBottomEdge()
+            self.applySettings()
         }
     }
 
     private func updatePermissionItem() {
         permissionItem.isHidden = clickBlocker?.isRunning ?? false
-    }
-
-    private func updateBottomEdge() {
-        engine?.setBottomEdgeEnabled(defaults.bool(forKey: Keys.appSwitcher) && ClickBlocker.hasPermission)
     }
 
     private func setUpMenu() {
@@ -155,66 +146,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusLine.isEnabled = false
         statusLine.isHidden = true
         menu.addItem(statusLine)
-        for entry in [enabledItem, swapItem, switcherItem, loginItem] {
+        for entry in [enabledItem, settingsItem, permissionItem] {
             entry.target = self
             menu.addItem(entry)
         }
-        permissionItem.target = self
         permissionItem.isHidden = true
-        menu.addItem(permissionItem)
-
         menu.addItem(.separator())
-        for hint in [brightnessHint, volumeHint, switcherHint] {
-            hint.isEnabled = false
-            menu.addItem(hint)
-        }
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit NordvaMacEdge", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         item.menu = menu
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
-        enabledItem.state = defaults.bool(forKey: Keys.enabled) ? .on : .off
-        swapItem.state = swapped ? .on : .off
-        brightnessHint.title = "Double-tap top \(swapped ? "right" : "left"): brightness to 100%"
-        volumeHint.title = "Double-tap bottom \(swapped ? "left" : "right"): mute or unmute"
-        loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        switcherItem.state = defaults.bool(forKey: Keys.appSwitcher) ? .on : .off
+        enabledItem.state = settings.enabled ? .on : .off
         if ClickBlocker.hasPermission { clickBlocker?.start() }
         updatePermissionItem()
-        updateBottomEdge()
-    }
-
-    @objc private func toggleSwitcher() {
-        defaults.set(!defaults.bool(forKey: Keys.appSwitcher), forKey: Keys.appSwitcher)
-        updateBottomEdge()
+        applySettings()
     }
 
     @objc private func toggleEnabled() {
-        let enabled = !defaults.bool(forKey: Keys.enabled)
-        defaults.set(enabled, forKey: Keys.enabled)
-        engine?.isEnabled = enabled
+        settings.enabled.toggle()
     }
 
-    @objc private func toggleSwap() {
-        defaults.set(!swapped, forKey: Keys.swapEdges)
-        engine?.setActiveCorners(activeCorners)
-    }
-
-    @objc private func toggleLogin() {
-        do {
-            if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
-            } else {
-                try SMAppService.mainApp.register()
-            }
-        } catch {
-            let alert = NSAlert()
-            alert.messageText = "Could not change Launch at Login"
-            alert.informativeText = error.localizedDescription
-            NSApp.activate(ignoringOtherApps: true)
-            alert.runModal()
-        }
+    @objc private func openSettings() {
+        settingsWindow.show()
     }
 
     private func runHUDDemo() {

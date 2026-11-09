@@ -53,6 +53,7 @@ public enum GestureEvent: Equatable, Sendable {
 public struct EdgeGestureRecognizer: Sendable {
     public struct Config: Sendable {
         public var edgeWidth: Double = 0.08
+        public var enabledEdges: Set<Edge> = [.left, .right]
         public var activationDistance: Double = 0.025
         public var verticalDominance: Double = 1.5
         public var cornerWidth: Double = 0.12
@@ -61,9 +62,9 @@ public struct EdgeGestureRecognizer: Sendable {
         public var doubleTapInterval: Double = 0.4
         public var activeCorners: Set<Corner> = [.topLeft, .bottomRight]
         public var bottomEdgeEnabled = false
-        public var bottomHeight: Double = 0.07
-        /// Trackpad widths per second, 0.3 is about 4.5 cm/s.
-        public var maxBottomSpeed: Double = 0.3
+        public var bottomHeight: Double = 0.15
+        /// Trackpad widths per second, 0.5 is about 7.5 cm/s.
+        public var maxBottomSpeed: Double = 0.5
         public var stillRadius: Double = 0.006
 
         public init() {}
@@ -210,9 +211,8 @@ public struct EdgeGestureRecognizer: Sendable {
     }
 
     private func edge(atX x: Double) -> Edge? {
-        if x <= config.edgeWidth { return .left }
-        if x >= 1 - config.edgeWidth { return .right }
-        return nil
+        let edge: Edge? = x <= config.edgeWidth ? .left : (x >= 1 - config.edgeWidth ? .right : nil)
+        return edge.flatMap { config.enabledEdges.contains($0) ? $0 : nil }
     }
 
     private func corner(at touch: TouchPoint) -> Corner? {

@@ -5,14 +5,14 @@ import NordvaMacEdgeCore
 /// value queues them up and the volume lags behind the finger, so the level is computed
 /// right away and only the latest value is written.
 final class LevelController {
-    private let sensitivity: Float = 1.6
     private let minimumStep: Float = 1.0 / 200
 
     private let volume = VolumeControl()
     private let brightness = BrightnessControl()
     private let hud: HUD
-    private let kindForEdge: (Edge) -> LevelKind
+    private let settings: Settings
 
+    private var sensitivity: Float = 1.6
     private var kind = LevelKind.volume
     private var level: Float?
     private var lastSubmitted: Float = 0
@@ -22,15 +22,16 @@ final class LevelController {
     private var pending: [LevelKind: Float] = [:]
     private var draining = false
 
-    init(hud: HUD, kindForEdge: @escaping (Edge) -> LevelKind) {
+    init(hud: HUD, settings: Settings) {
         self.hud = hud
-        self.kindForEdge = kindForEdge
+        self.settings = settings
     }
 
     func handle(_ event: GestureEvent) {
         switch event {
         case let .began(edge):
-            kind = kindForEdge(edge)
+            kind = settings.kind(for: edge)
+            sensitivity = Float(settings.sensitivity)
             level = control(for: kind).read()
             lastSubmitted = level ?? 0
             Log.debug("slide began: edge \(edge.rawValue), \(kind), level \(describe(level))")

@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon.png" width="128" alt="NordvaMacEdge icon"></p>
+
 # NordvaMacEdge
 
 **Turn the edges of your MacBook trackpad into volume and brightness sliders.**
@@ -22,21 +24,35 @@ Works on any MacBook with macOS 13 Ventura or later, Apple Silicon or Intel. No 
    asks for Accessibility access. Click **Open System Settings** and turn **NordvaMacEdge** on.
    This powers the app switcher and stops corner taps from also clicking; volume and
    brightness work even without it.
-5. **Optional:** click the slider icon in the menu bar and turn on **Launch at Login**.
+5. **Optional:** click the slider icon in the menu bar, choose **Settings…** and turn on **Launch at login**.
 
 That's it - slide a finger along the right edge of the trackpad and the volume follows.
 
 If macOS says the app "is damaged and can't be opened", open Terminal and run
 `xattr -dr com.apple.quarantine /Applications/NordvaMacEdge.app`, then open the app again.
 
-**To uninstall:** click the slider icon → **Quit**, then move NordvaMacEdge from Applications to the Trash.
+If NordvaMacEdge is switched on under Accessibility but the app switcher still does nothing
+(this happens after updating from an older version), select NordvaMacEdge in that list,
+remove it with the **−** button, then choose **Allow Access for App Switcher and Corners…**
+in the menu and switch it on again.
+
+**To uninstall:** click the slider icon → **Quit NordvaMacEdge**, then move NordvaMacEdge from Applications to the Trash.
+
+## Settings
+
+Click the slider icon in the menu bar → **Settings…** (or press ⌘, while the menu is open).
+Turn each gesture on or off, swap the sides, and tune how it feels: how far to slide for
+the full volume range, how far per app in the switcher and how slow the switcher slide must be.
+Distances are shown in centimeters of your own trackpad.
+
+<p align="center"><img src="docs/settings.png" width="460" alt="Settings window"></p>
 
 ## Features
 
 - **Smooth.** The level follows your finger without lag, and an indicator appears at the edge of the screen.
 - **Stays out of your way.** Normal pointing, two-finger scrolling, clicking and dragging near the edges work as before: a gesture starts only when the finger lands right at the edge and moves along it.
 - **The pointer stays put** while a gesture is in progress.
-- **Lightweight.** No windows, no Dock icon, just a menu bar item.
+- **Lightweight.** No Dock icon, just a menu bar item and a settings window when you need it.
 - **Open source.** Plain Swift, no third-party dependencies, builds with one command.
 
 ## Gestures
@@ -49,10 +65,9 @@ If macOS says the app "is damaged and can't be opened", open Terminal and run
 | double-tap the **bottom-right** corner | mute or unmute |
 | slide **slowly** along the **bottom** edge | app switcher, like Command+Tab: right for the next app, left for the previous one, lift to switch |
 
-The other two corners stay a regular trackpad. You can swap the edges in the menu, and
-the corners move with them: brightness is always the top corner on its side, sound is
-the bottom corner on its side. The menu also lets you pause the app, turn the app
-switcher off, and launch at login.
+The other two corners stay a regular trackpad. When you swap the sides in Settings, the
+corners move with them: brightness is always the top corner on its side, sound is the
+bottom corner on its side. **Enabled** in the menu pauses everything at once.
 
 ## Build from source
 
@@ -85,8 +100,12 @@ Debug flags:
 ```bash
 build/NordvaMacEdge.app/Contents/MacOS/NordvaMacEdge --check     # check trackpad, volume and brightness without gestures
 build/NordvaMacEdge.app/Contents/MacOS/NordvaMacEdge --debug     # log fingers, gestures and clicks to the console
+build/NordvaMacEdge.app/Contents/MacOS/NordvaMacEdge --trace     # like --debug, plus every touch frame with a timestamp
 build/NordvaMacEdge.app/Contents/MacOS/NordvaMacEdge --hud-demo  # show the indicator and quit
+build/NordvaMacEdge.app/Contents/MacOS/NordvaMacEdge --settings-snapshot docs/settings.png  # render the settings window
 ```
+
+The icon is drawn in code: `swift scripts/make-icon.swift` regenerates `Resources/AppIcon.icns` and `docs/icon.png`.
 
 ## How it works
 
@@ -102,6 +121,8 @@ build/NordvaMacEdge.app/Contents/MacOS/NordvaMacEdge --hud-demo  # show the indi
 | `Sources/NordvaMacEdge/AppSwitcher.swift` | presses Command+Tab for the bottom edge |
 | `Sources/NordvaMacEdge/Controls.swift` | volume via CoreAudio, brightness via DisplayServices |
 | `Sources/NordvaMacEdge/HUD.swift` | the level indicator next to the screen edge |
+| `Sources/NordvaMacEdge/Settings.swift` | preferences, read by gesture code straight from UserDefaults |
+| `Sources/NordvaMacEdge/SettingsWindow.swift` | the SwiftUI settings window |
 
 A frame goes: trackpad → `TouchSource` → `GestureEngine` → `EdgeGestureRecognizer` →
 `LevelController` (CoreAudio or DisplayServices, plus `HUD`) or `AppSwitcher`.

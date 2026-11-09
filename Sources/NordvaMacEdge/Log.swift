@@ -2,6 +2,7 @@ import Foundation
 
 enum Log {
     static var isEnabled = false
+    static var traceFrames = false
 
     static func debug(_ message: @autoclosure () -> String) {
         guard isEnabled else { return }

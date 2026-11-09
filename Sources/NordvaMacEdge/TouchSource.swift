@@ -12,6 +12,7 @@ private struct MultitouchAPI {
     typealias Start = @convention(c) (UnsafeMutableRawPointer, Int32) -> Int32
     typealias Stop = @convention(c) (UnsafeMutableRawPointer) -> Int32
     typealias Release = @convention(c) (UnsafeMutableRawPointer) -> Void
+    typealias Dimensions = @convention(c) (UnsafeMutableRawPointer, UnsafeMutablePointer<Int32>, UnsafeMutablePointer<Int32>) -> Int32
 
     let createDefault: CreateDefault
     let register: Register
@@ -19,6 +20,7 @@ private struct MultitouchAPI {
     let start: Start
     let stop: Stop
     let release: Release
+    let dimensions: Dimensions?
 
     init?() {
         let path = "/System/Library/PrivateFrameworks/MultitouchSupport.framework/MultitouchSupport"
@@ -36,6 +38,7 @@ private struct MultitouchAPI {
         self.start = unsafeBitCast(start, to: Start.self)
         self.stop = unsafeBitCast(stop, to: Stop.self)
         self.release = unsafeBitCast(release, to: Release.self)
+        dimensions = dlsym(handle, "MTDeviceGetSensorSurfaceDimensions").map { unsafeBitCast($0, to: Dimensions.self) }
     }
 }
 
@@ -71,6 +74,15 @@ final class TouchSource {
         guard let api = MultitouchAPI() else { return nil }
         self.api = api
         frameHandler = onFrame
+    }
+
+    /// Physical surface size in centimeters; the framework reports hundredths of a millimeter.
+    var surfaceSize: (width: Double, height: Double)? {
+        guard let device, let dimensions = api.dimensions else { return nil }
+        var width: Int32 = 0
+        var height: Int32 = 0
+        guard dimensions(device, &width, &height) == 0, width > 0, height > 0 else { return nil }
+        return (Double(width) / 1000, Double(height) / 1000)
     }
 
     @discardableResult
