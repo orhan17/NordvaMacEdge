@@ -15,6 +15,13 @@ echo "собрано: $app"
 
 if [[ "${1:-}" == "--install" ]]; then
     osascript -e 'quit app "NordvaMacEdge"' 2>/dev/null || true
+    # quit возвращается сразу, а старая копия закрывается не мгновенно. Если открыть
+    # новую раньше, macOS отдаст ошибку -600 и ничего не запустит.
+    for _ in {1..50}; do
+        pgrep -xq NordvaMacEdge || break
+        sleep 0.1
+    done
+    pkill -x NordvaMacEdge 2>/dev/null || true
     rm -rf /Applications/NordvaMacEdge.app
     cp -R "$app" /Applications/
     open /Applications/NordvaMacEdge.app
