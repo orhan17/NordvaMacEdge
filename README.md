@@ -5,8 +5,8 @@
 **Turn the edges of your MacBook trackpad into volume and brightness sliders.**
 
 NordvaMacEdge is a tiny, free menu bar app for macOS. Slide a finger along the right
-edge of the trackpad to change the volume, along the left edge to change the screen
-brightness. Double-tap a corner for quick actions, or slide slowly along the bottom
+edge of the trackpad to change the volume, along the left edge to change the brightness
+of the screen under the pointer - the MacBook display or an external monitor. Double-tap a corner for quick actions, or slide slowly along the bottom
 edge to switch apps. No reaching for the keyboard or Control Center - your hand stays
 on the trackpad.
 
@@ -53,6 +53,8 @@ Distances are shown in centimeters of your own trackpad.
 - **Smooth.** The level follows your finger without lag, and an indicator appears at the edge of the screen.
 - **Stays out of your way.** Normal pointing, two-finger scrolling, clicking and dragging near the edges work as before: a gesture starts only when the finger lands right at the edge and moves along it.
 - **The pointer stays put** while a gesture is in progress.
+- **External monitors too.** Brightness follows the pointer: Apple displays work like the built-in
+  one, other monitors are controlled over DDC/CI, the same channel their own buttons use.
 - **You can feel it.** The trackpad clicks softly every 10%, a little firmer at 0 and 100%, and once for each app in the switcher, like a dial with notches.
 - **Lightweight.** No Dock icon, just a menu bar item and a settings window when you need it.
 - **Open source.** Plain Swift, no third-party dependencies, builds with one command.
@@ -62,8 +64,8 @@ Distances are shown in centimeters of your own trackpad.
 | Gesture | Action |
 |---------|--------|
 | one finger up or down along the **right** edge | volume |
-| one finger up or down along the **left** edge | built-in display brightness |
-| double-tap the **top-left** corner | brightness to 100% |
+| one finger up or down along the **left** edge | brightness of the display under the pointer |
+| double-tap the **top-left** corner | brightness to 100% on the display under the pointer |
 | double-tap the **bottom-right** corner | mute or unmute |
 | slide **slowly** along the **bottom** edge | app switcher, like Command+Tab: right for the next app, left for the previous one, lift to switch |
 
@@ -121,7 +123,9 @@ The icon is drawn in code: `swift scripts/make-icon.swift` regenerates `Resource
 | `Sources/NordvaMacEdge/ClickBlocker.swift` | swallows the click macOS makes out of a corner tap |
 | `Sources/NordvaMacEdge/LevelController.swift` | turns gestures into levels and writes them to the system |
 | `Sources/NordvaMacEdge/AppSwitcher.swift` | presses Command+Tab for the bottom edge |
-| `Sources/NordvaMacEdge/Controls.swift` | volume via CoreAudio, brightness via DisplayServices |
+| `Sources/NordvaMacEdge/Controls.swift` | volume via CoreAudio, brightness of the display under the pointer via DisplayServices |
+| `Sources/NordvaMacEdge/MonitorBrightness.swift` | brightness of other monitors over DDC/CI |
+| `Sources/NordvaMacEdgeCore/DDCPacket.swift` | builds and parses DDC/CI messages |
 | `Sources/NordvaMacEdge/HUD.swift` | the level indicator next to the screen edge |
 | `Sources/NordvaMacEdgeCore/LevelHaptics.swift` | decides when a level change should click |
 | `Sources/NordvaMacEdge/Haptics.swift` | plays the trackpad clicks |
@@ -167,6 +171,14 @@ A frame goes: trackpad → `TouchSource` → `GestureEngine` → `EdgeGestureRec
   a trackpad: timed frames are simply fed to it as an array.
 - **The app switcher presses the real Command+Tab,** so it looks and behaves exactly like
   the system one instead of being a look-alike.
+- **Brightness goes to the display under the pointer.** The pointer stays put during a slide, so
+  the target cannot change halfway, and the indicator appears on the same screen. Built-in and Apple
+  displays go through DisplayServices; for other monitors DisplayServices reports that it cannot
+  change them, so the app talks to the monitor directly over DDC/CI. If the monitor does not answer,
+  the slide changes the built-in display, like before.
+- **The monitor is found by its framebuffer, not by its name.** CoreDisplay gives the IO registry
+  path of the framebuffer behind a display, and the DDC service of the same port follows it in the
+  registry. Two identical monitors still get the right commands.
 - **The indicator is custom.** The system volume overlay only appears on key presses,
   and the app changes the level directly.
 
@@ -177,6 +189,13 @@ A frame goes: trackpad → `TouchSource` → `GestureEngine` → `EdgeGestureRec
   up: the volume lags behind the finger and keeps moving after the finger is lifted. So the
   level is computed immediately, and only the latest value is written while the previous
   write is still in progress.
+- **Monitors drop DDC commands that come too fast.** A write returns in ~4 ms, but on a Dell
+  E2425HSM 49 writes in a row ended at 94% instead of 98%. With a 40 ms pause between writes and
+  the final value sent once more after the finger stops, every test landed exactly. Only the
+  latest value is sent, like the volume.
+- **Reading a monitor is slow.** A DDC read takes ~65 ms and would delay the start of a slide, so
+  the level is read once and reused for a minute after the last change. Changing the brightness
+  with the monitor's own buttons in that minute makes the next slide start from the old value.
 - **The framework only reads touches, it does not take them from the system.** The pointer
   would move with the finger. So the pointer is detached from the mouse
   (`CGAssociateMouseAndMouseCursorPosition`) and moved back on every frame.
@@ -206,7 +225,8 @@ A frame goes: trackpad → `TouchSource` → `GestureEngine` → `EdgeGestureRec
 ## Limitations
 
 - built-in trackpad only, Magic Trackpad is not supported
-- built-in display brightness only, external monitors are not controlled by this API
+- third-party monitors need Apple silicon and DDC/CI turned on in the monitor's own menu (it usually
+  is); DisplayLink docks and some adapters do not pass DDC, and then the built-in display changes instead
 - with Accessibility access, a single tap in the two active corners does not click: those corners belong to gestures
 - the app is ad-hoc signed, so a copy built on another Mac will not open without
   `xattr -dr com.apple.quarantine NordvaMacEdge.app`; building it yourself is easier

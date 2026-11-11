@@ -25,11 +25,22 @@ final class SettingsWindowController {
             window.title = "NordvaMacEdge Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
-            window.center()
             self.window = window
         }
+        guard let window else { return }
+        // center() uses the screen with the key window; the menu was opened on the screen with the pointer.
+        let mouse = NSEvent.mouseLocation
+        if let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }),
+           !window.isVisible || window.screen != screen {
+            let area = screen.visibleFrame
+            let size = window.frame.size
+            window.setFrameOrigin(NSPoint(
+                x: area.midX - size.width / 2,
+                y: area.minY + (area.height - size.height) * 2 / 3
+            ))
+        }
         NSApp.activate(ignoringOtherApps: true)
-        window?.makeKeyAndOrderFront(nil)
+        window.makeKeyAndOrderFront(nil)
     }
 
     /// `--settings-snapshot <path>`: renders the window content to a PNG without showing it.
@@ -57,7 +68,7 @@ private struct SettingsView: View {
         Form {
             Section("Gestures") {
                 toggle("Volume", detail: "Slide along the \(settings.volumeSide.rawValue) edge", isOn: $settings.volumeEdge)
-                toggle("Brightness", detail: "Slide along the \(settings.brightnessSide.rawValue) edge", isOn: $settings.brightnessEdge)
+                toggle("Brightness", detail: "Slide along the \(settings.brightnessSide.rawValue) edge, for the display under the pointer", isOn: $settings.brightnessEdge)
                 toggle(
                     "Corner double-taps",
                     detail: "Top \(settings.brightnessSide.rawValue): brightness to 100%. "

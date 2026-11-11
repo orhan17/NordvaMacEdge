@@ -1,6 +1,6 @@
 import Foundation
 
-/// `--check`: nudges volume and brightness by 1% and back. Skips the volume write when muted, since it would unmute.
+/// `--check`: nudges volume and the brightness of every display by 2% and back. Skips the volume write when muted, since it would unmute.
 enum SelfCheck {
     static func run() -> Int32 {
         var failed = false
@@ -21,11 +21,30 @@ enum SelfCheck {
             failed = true
         }
 
-        if !roundTrip(name: "brightness", control: BrightnessControl()) {
-            failed = true
+        for display in Brightness.onlineDisplays() {
+            let name = "brightness of display \(display)"
+            if DisplayBrightness.supports(display) {
+                if !roundTrip(name: name, control: DisplayBrightness(display: display)) { failed = true }
+            } else if let monitor = MonitorBrightness(display: display) {
+                monitor.cacheLifetime = 0
+                if !roundTrip(name: name + " over DDC", control: monitor) { failed = true }
+            } else {
+                print("\(name): not adjustable")
+            }
         }
 
         return failed ? 1 : 0
+    }
+
+    @discardableResult
+    private static func set(_ control: LevelControl, _ level: Float) -> Bool {
+        let wrote = control.write(level)
+        if control.repeatsLastWrite {
+            Thread.sleep(forTimeInterval: 0.1)
+            control.write(level)
+        }
+        Thread.sleep(forTimeInterval: 0.2)
+        return wrote
     }
 
     private static func roundTrip(name: String, control: LevelControl) -> Bool {
@@ -33,12 +52,10 @@ enum SelfCheck {
             print("\(name): CANNOT READ")
             return false
         }
-        let test = original >= 0.5 ? original - 0.01 : original + 0.01
-        let wrote = control.write(test)
-        Thread.sleep(forTimeInterval: 0.2)
+        let test = original >= 0.5 ? original - 0.02 : original + 0.02
+        let wrote = set(control, test)
         let seen = control.read()
-        control.write(original)
-        Thread.sleep(forTimeInterval: 0.2)
+        set(control, original)
         let restored = control.read()
 
         let applied = wrote && seen.map { abs($0 - test) < 0.005 } == true

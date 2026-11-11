@@ -8,19 +8,20 @@ final class LevelController {
     private let minimumStep: Float = 1.0 / 200
 
     private let volume = VolumeControl()
-    private let brightness = BrightnessControl()
+    private let brightness = Brightness()
     private let hud: HUD
     private let settings: Settings
     private let haptics: Haptics
 
     private var sensitivity: Float = 1.6
     private var kind = LevelKind.volume
+    private var control: LevelControl?
     private var level: Float?
     private var lastSubmitted: Float = 0
 
     private let io = DispatchQueue(label: "nordvamacedge.io")
     private let pendingLock = NSLock()
-    private var pending: [LevelKind: Float] = [:]
+    private var pending: [ObjectIdentifier: (control: LevelControl, value: Float)] = [:]
     private var draining = false
 
     init(hud: HUD, settings: Settings, haptics: Haptics) {
@@ -34,20 +35,25 @@ final class LevelController {
         case let .began(edge):
             kind = settings.kind(for: edge)
             sensitivity = Float(settings.sensitivity)
-            level = control(for: kind).read()
+            if kind == .volume {
+                control = volume
+                level = volume.read()
+            } else {
+                (control, level) = brightness.underPointer()
+            }
             lastSubmitted = level ?? 0
-            Log.debug("slide began: edge \(edge.rawValue), \(kind), level \(describe(level))")
+            Log.debug("slide began: edge \(edge.rawValue), \(kind) via \(control.map { "\(type(of: $0))" } ?? "none"), level \(describe(level))")
             show(kind, at: edge, level: level)
 
         case let .moved(edge, delta):
-            guard let current = level else { return }
+            guard let current = level, let control else { return }
             let next = min(1, max(0, current + Float(delta) * sensitivity))
             level = next
             if let click = haptic(from: Double(current), to: Double(next)) {
                 haptics.play(click)
             }
             if abs(next - lastSubmitted) >= minimumStep || ((next == 0 || next == 1) && next != lastSubmitted) {
-                submit(next, for: kind)
+                submit(next, to: control)
                 lastSubmitted = next
             }
             show(kind, at: edge, level: next)
@@ -55,6 +61,7 @@ final class LevelController {
         case .ended:
             Log.debug("slide ended, level \(describe(level))")
             level = nil
+            control = nil
             DispatchQueue.main.async { [hud] in hud.hideSoon() }
 
         case .tapped:
@@ -67,9 +74,10 @@ final class LevelController {
 
     private func runAction(for corner: Corner) {
         if corner.isTop {
-            brightness.write(1)
-            Log.debug("double-tap: brightness to 100%")
-            flash(.brightness, at: corner.edge, level: brightness.read() ?? 1)
+            let display = brightness.underPointer().control
+            submit(1, to: display)
+            Log.debug("double-tap: brightness to 100% via \(type(of: display))")
+            flash(.brightness, at: corner.edge, level: 1)
         } else {
             guard let muted = volume.toggleMute() else {
                 Log.debug("double-tap: this output device cannot mute")
@@ -87,9 +95,9 @@ final class LevelController {
         }
     }
 
-    private func submit(_ value: Float, for kind: LevelKind) {
+    private func submit(_ value: Float, to control: LevelControl) {
         pendingLock.lock()
-        pending[kind] = value
+        pending[ObjectIdentifier(control)] = (control, value)
         let shouldStart = !draining
         draining = true
         pendingLock.unlock()
@@ -99,20 +107,31 @@ final class LevelController {
     }
 
     private func drain() {
+        var last: (control: LevelControl, value: Float)?
         while true {
             pendingLock.lock()
-            guard let (kind, value) = pending.popFirst() else {
-                draining = false
+            if let (_, next) = pending.popFirst() {
                 pendingLock.unlock()
-                return
+                next.control.write(next.value)
+                last = next
+                if next.control.writeInterval > 0 {
+                    Thread.sleep(forTimeInterval: next.control.writeInterval)
+                }
+                continue
             }
+            if let repeated = last, repeated.control.repeatsLastWrite {
+                pendingLock.unlock()
+                last = nil
+                Thread.sleep(forTimeInterval: 0.1)
+                if pendingLock.withLock({ pending.isEmpty }) {
+                    repeated.control.write(repeated.value)
+                }
+                continue
+            }
+            draining = false
             pendingLock.unlock()
-            control(for: kind).write(value)
+            return
         }
-    }
-
-    private func control(for kind: LevelKind) -> LevelControl {
-        kind == .volume ? volume : brightness
     }
 
     private func show(_ kind: LevelKind, at edge: Edge, level: Float?) {

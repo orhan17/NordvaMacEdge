@@ -1,3 +1,4 @@
+import AppKit
 import AudioToolbox
 import CoreAudio
 import CoreGraphics
@@ -8,9 +9,18 @@ enum LevelKind {
     case brightness
 }
 
-protocol LevelControl {
+protocol LevelControl: AnyObject {
     func read() -> Float?
     @discardableResult func write(_ level: Float) -> Bool
+    /// The pause after each write. Monitors drop DDC commands that come too fast.
+    var writeInterval: TimeInterval { get }
+    /// Monitors now and then drop a DDC command, so the final value is sent again once the finger stops.
+    var repeatsLastWrite: Bool { get }
+}
+
+extension LevelControl {
+    var writeInterval: TimeInterval { 0 }
+    var repeatsLastWrite: Bool { false }
 }
 
 final class VolumeControl: LevelControl {
@@ -85,41 +95,116 @@ final class VolumeControl: LevelControl {
     }
 }
 
-/// Built-in display only. There is no public API for brightness, so this uses the private DisplayServices.
-final class BrightnessControl: LevelControl {
+/// Built-in and Apple displays. There is no public API for brightness, so this uses the private DisplayServices.
+final class DisplayBrightness: LevelControl {
     private typealias GetFunction = @convention(c) (UInt32, UnsafeMutablePointer<Float>) -> Int32
     private typealias SetFunction = @convention(c) (UInt32, Float) -> Int32
+    private typealias CanChangeFunction = @convention(c) (UInt32) -> Bool
 
-    private let getBrightness: GetFunction?
-    private let setBrightness: SetFunction?
-
-    init() {
-        let path = "/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices"
-        let handle = dlopen(path, RTLD_NOW)
-        getBrightness = dlsym(handle, "DisplayServicesGetBrightness").map {
-            unsafeBitCast($0, to: GetFunction.self)
-        }
-        setBrightness = dlsym(handle, "DisplayServicesSetBrightness").map {
-            unsafeBitCast($0, to: SetFunction.self)
-        }
+    private static let handle = dlopen(
+        "/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices", RTLD_NOW
+    )
+    private static let getBrightness = dlsym(handle, "DisplayServicesGetBrightness").map {
+        unsafeBitCast($0, to: GetFunction.self)
+    }
+    private static let setBrightness = dlsym(handle, "DisplayServicesSetBrightness").map {
+        unsafeBitCast($0, to: SetFunction.self)
+    }
+    private static let canChangeBrightness = dlsym(handle, "DisplayServicesCanChangeBrightness").map {
+        unsafeBitCast($0, to: CanChangeFunction.self)
     }
 
-    private func builtInDisplay() -> CGDirectDisplayID? {
-        var displays = [CGDirectDisplayID](repeating: 0, count: 16)
-        var count: UInt32 = 0
-        guard CGGetOnlineDisplayList(16, &displays, &count) == .success else { return nil }
-        return displays.prefix(Int(count)).first { CGDisplayIsBuiltin($0) != 0 }
+    static func supports(_ display: CGDirectDisplayID) -> Bool {
+        canChangeBrightness?(display) ?? (CGDisplayIsBuiltin(display) != 0)
+    }
+
+    let display: CGDirectDisplayID
+
+    init(display: CGDirectDisplayID) {
+        self.display = display
     }
 
     func read() -> Float? {
-        guard let getBrightness, let display = builtInDisplay() else { return nil }
+        guard let getBrightness = Self.getBrightness else { return nil }
         var level: Float = 0
         return getBrightness(display, &level) == 0 ? level : nil
     }
 
     @discardableResult
     func write(_ level: Float) -> Bool {
-        guard let setBrightness, let display = builtInDisplay() else { return false }
+        guard let setBrightness = Self.setBrightness else { return false }
         return setBrightness(display, level) == 0
+    }
+}
+
+/// The display under the pointer: DisplayServices for built-in and Apple displays, DDC for other
+/// monitors, and the built-in display when the monitor does not answer DDC.
+final class Brightness {
+    private let lock = NSLock()
+    private var monitors: [CGDirectDisplayID: MonitorBrightness] = [:]
+    private var silent: Set<CGDirectDisplayID> = []
+    private var observer: NSObjectProtocol?
+
+    init() {
+        observer = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            self?.lock.withLock {
+                self?.monitors = [:]
+                self?.silent = []
+            }
+        }
+    }
+
+    func underPointer() -> (control: LevelControl, level: Float?) {
+        if let display = Self.displayUnderPointer() {
+            if DisplayBrightness.supports(display) {
+                let control = DisplayBrightness(display: display)
+                return (control, control.read())
+            }
+            if let monitor = monitor(for: display) {
+                if let level = monitor.read() {
+                    return (monitor, level)
+                }
+                lock.withLock {
+                    monitors[display] = nil
+                    silent.insert(display)
+                }
+            }
+        }
+        let builtIn = DisplayBrightness(display: Self.builtInDisplay() ?? CGMainDisplayID())
+        return (builtIn, builtIn.read())
+    }
+
+    private func monitor(for display: CGDirectDisplayID) -> MonitorBrightness? {
+        lock.withLock {
+            if silent.contains(display) { return nil }
+            if let monitor = monitors[display] { return monitor }
+            guard let monitor = MonitorBrightness(display: display) else {
+                silent.insert(display)
+                return nil
+            }
+            monitors[display] = monitor
+            return monitor
+        }
+    }
+
+    static func displayUnderPointer() -> CGDirectDisplayID? {
+        guard let point = CGEvent(source: nil)?.location else { return nil }
+        var display: CGDirectDisplayID = 0
+        var count: UInt32 = 0
+        guard CGGetDisplaysWithPoint(point, 1, &display, &count) == .success, count > 0 else { return nil }
+        return display
+    }
+
+    static func builtInDisplay() -> CGDirectDisplayID? {
+        onlineDisplays().first { CGDisplayIsBuiltin($0) != 0 }
+    }
+
+    static func onlineDisplays() -> [CGDirectDisplayID] {
+        var displays = [CGDirectDisplayID](repeating: 0, count: 16)
+        var count: UInt32 = 0
+        guard CGGetOnlineDisplayList(16, &displays, &count) == .success else { return [] }
+        return Array(displays.prefix(Int(count)))
     }
 }
