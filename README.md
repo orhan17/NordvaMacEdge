@@ -14,22 +14,39 @@ on the trackpad.
 
 Works on any MacBook with macOS 13 Ventura or later, Apple Silicon or Intel. No coding needed.
 
-1. **Download** `NordvaMacEdge.zip` from the [latest release](https://github.com/orhan17/NordvaMacEdge/releases/latest).
-2. **Unzip** it (double-click the file in Downloads) and **drag `NordvaMacEdge.app` into Applications**.
-3. **Open it.** The first time, macOS says it could not verify the app: the app is free and
+### The quick way: one command
+
+Open **Terminal** (press ⌘Space, type "Terminal"), paste this line and press Return:
+
+```bash
+curl -fsSL https://github.com/orhan17/NordvaMacEdge/releases/latest/download/NordvaMacEdge.zip -o /tmp/NordvaMacEdge.zip && { pkill -x NordvaMacEdge; sleep 1; rm -rf /Applications/NordvaMacEdge.app; ditto -x -k /tmp/NordvaMacEdge.zip /Applications && open /Applications/NordvaMacEdge.app; }
+```
+
+It downloads the latest release into Applications and opens it. Run the same line later to update.
+There is no "could not verify" warning this way: macOS shows it for files that a browser downloaded,
+and a download made in Terminal is not marked like that.
+
+### Or download it
+
+1. **Download** `NordvaMacEdge.dmg` from the [latest release](https://github.com/orhan17/NordvaMacEdge/releases/latest),
+   open it and **drag NordvaMacEdge into Applications**.
+2. **Open it.** The first time, macOS says it could not verify the app: the app is free and
    not registered with Apple, which costs developers $99 a year. Click **Done**, then go to
    **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to
    NordvaMacEdge, and confirm with your password or Touch ID. This is needed only once.
-4. **Allow access.** A slider icon appears in the menu bar at the top of the screen, and macOS
-   asks for Accessibility access. Click **Open System Settings** and turn **NordvaMacEdge** on.
-   This powers the app switcher and stops corner taps from also clicking; volume and
-   brightness work even without it.
-5. **Optional:** click the slider icon in the menu bar, choose **Settings…** and turn on **Launch at login**.
-
-That's it - slide a finger along the right edge of the trackpad and the volume follows.
 
 If macOS says the app "is damaged and can't be opened", open Terminal and run
 `xattr -dr com.apple.quarantine /Applications/NordvaMacEdge.app`, then open the app again.
+
+### Then
+
+1. **Allow access.** A slider icon appears in the menu bar at the top of the screen, and macOS
+   asks for Accessibility access. Click **Open System Settings** and turn **NordvaMacEdge** on.
+   This powers the app switcher and stops corner taps from also clicking; volume and
+   brightness work even without it.
+2. **Optional:** click the slider icon in the menu bar, choose **Settings…** and turn on **Launch at login**.
+
+That's it - slide a finger along the right edge of the trackpad and the volume follows.
 
 If NordvaMacEdge is switched on under Accessibility but the app switcher still does nothing
 (this happens after updating from an older version), select NordvaMacEdge in that list,
@@ -94,9 +111,9 @@ Corners…** in the menu) is needed for:
 Other commands:
 
 ```bash
-./build.sh         # build build/NordvaMacEdge.app
-./build.sh --zip   # universal build packed into build/NordvaMacEdge.zip for a release
-./test.sh          # gesture recognizer tests
+./build.sh            # build build/NordvaMacEdge.app
+./build.sh --release  # universal build packed into build/NordvaMacEdge.zip and .dmg for a release
+./test.sh             # tests for the gesture recognizer, haptics and DDC messages
 ```
 
 Debug flags:
@@ -228,8 +245,8 @@ A frame goes: trackpad → `TouchSource` → `GestureEngine` → `EdgeGestureRec
 - third-party monitors need Apple silicon and DDC/CI turned on in the monitor's own menu (it usually
   is); DisplayLink docks and some adapters do not pass DDC, and then the built-in display changes instead
 - with Accessibility access, a single tap in the two active corners does not click: those corners belong to gestures
-- the app is ad-hoc signed, so a copy built on another Mac will not open without
-  `xattr -dr com.apple.quarantine NordvaMacEdge.app`; building it yourself is easier
+- the app is ad-hoc signed and not notarized by Apple, so a copy downloaded in a browser needs
+  **Open Anyway** once; the Terminal install and building it yourself avoid that
 
 ## License
 

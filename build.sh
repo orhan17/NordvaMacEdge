@@ -1,7 +1,8 @@
 #!/bin/bash
 # Builds build/NordvaMacEdge.app.
 #   --install  also copies it to /Applications and launches it
-#   --zip      builds a universal app (Apple Silicon + Intel) and packs build/NordvaMacEdge.zip
+#   --release  builds a universal app (Apple Silicon + Intel) and packs it into
+#              build/NordvaMacEdge.zip and build/NordvaMacEdge.dmg
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -10,7 +11,7 @@ app=build/NordvaMacEdge.app
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS"
 
-if [[ "$mode" == "--zip" ]]; then
+if [[ "$mode" == "--release" ]]; then
     slices=()
     for triple in arm64-apple-macosx13.0 x86_64-apple-macosx13.0; do
         swift build -c release --triple "$triple"
@@ -30,10 +31,19 @@ cp Resources/AppIcon.icns "$app/Contents/Resources/"
 codesign --force --sign - -r '=designated => identifier "io.github.orhan17.NordvaMacEdge"' "$app"
 echo "built: $app"
 
-if [[ "$mode" == "--zip" ]]; then
-    rm -f build/NordvaMacEdge.zip
+if [[ "$mode" == "--release" ]]; then
+    rm -f build/NordvaMacEdge.zip build/NordvaMacEdge.dmg
     ditto -c -k --keepParent "$app" build/NordvaMacEdge.zip
     echo "packed: build/NordvaMacEdge.zip"
+
+    stage=build/dmg
+    rm -rf "$stage"
+    mkdir -p "$stage"
+    cp -R "$app" "$stage/"
+    ln -s /Applications "$stage/Applications"
+    hdiutil create -quiet -volname NordvaMacEdge -srcfolder "$stage" -fs HFS+ -format UDZO -ov build/NordvaMacEdge.dmg
+    rm -rf "$stage"
+    echo "packed: build/NordvaMacEdge.dmg"
 fi
 
 if [[ "$mode" == "--install" ]]; then
