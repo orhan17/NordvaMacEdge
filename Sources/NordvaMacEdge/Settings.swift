@@ -16,6 +16,12 @@ final class Settings: ObservableObject {
         static let switcherStep = "switcherStep"
         static let switcherMaxSpeed = "switcherMaxSpeed"
         static let haptics = "haptics"
+        static let hudPercent = "hudPercent"
+        static let hudStyle = "hudStyle"
+        static let hudColor = "hudColor"
+        static let hudSize = "hudSize"
+        static let hudPosition = "hudPosition"
+        static let hudDuration = "hudDuration"
     }
 
     static let sensitivityRange: ClosedRange<Double> = 0.8...3.0
@@ -33,6 +39,12 @@ final class Settings: ObservableObject {
         Key.switcherStep: 0.07,
         Key.switcherMaxSpeed: 0.5,
         Key.haptics: true,
+        Key.hudPercent: true,
+        Key.hudStyle: HUDStyle.bar.rawValue,
+        Key.hudColor: HUDColor.standard.rawValue,
+        Key.hudSize: HUDSize.medium.rawValue,
+        Key.hudPosition: HUDPosition.middle.rawValue,
+        Key.hudDuration: HUDDuration.normal.rawValue,
     ]
 
     private let store = UserDefaults.standard
@@ -93,6 +105,36 @@ final class Settings: ObservableObject {
         set { save(newValue, Key.haptics) }
     }
 
+    var hudPercent: Bool {
+        get { store.bool(forKey: Key.hudPercent) }
+        set { save(newValue, Key.hudPercent) }
+    }
+
+    var hudStyle: HUDStyle {
+        get { HUDStyle(rawValue: store.string(forKey: Key.hudStyle) ?? "") ?? .bar }
+        set { save(newValue.rawValue, Key.hudStyle) }
+    }
+
+    var hudColor: HUDColor {
+        get { HUDColor(rawValue: store.string(forKey: Key.hudColor) ?? "") ?? .standard }
+        set { save(newValue.rawValue, Key.hudColor) }
+    }
+
+    var hudSize: HUDSize {
+        get { HUDSize(rawValue: store.string(forKey: Key.hudSize) ?? "") ?? .medium }
+        set { save(newValue.rawValue, Key.hudSize) }
+    }
+
+    var hudPosition: HUDPosition {
+        get { HUDPosition(rawValue: store.string(forKey: Key.hudPosition) ?? "") ?? .middle }
+        set { save(newValue.rawValue, Key.hudPosition) }
+    }
+
+    var hudDuration: HUDDuration {
+        get { HUDDuration(rawValue: store.string(forKey: Key.hudDuration) ?? "") ?? .normal }
+        set { save(newValue.rawValue, Key.hudDuration) }
+    }
+
     var launchAtLogin: Bool {
         get { SMAppService.mainApp.status == .enabled }
         set {
@@ -141,5 +183,55 @@ final class Settings: ObservableObject {
         objectWillChange.send()
         store.set(value, forKey: key)
         onChange?()
+    }
+}
+
+enum HUDStyle: String, CaseIterable, Identifiable {
+    case bar, ring, percent
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .bar: return "Bar"
+        case .ring: return "Ring"
+        case .percent: return "Percent only"
+        }
+    }
+}
+
+enum HUDColor: String, CaseIterable, Identifiable {
+    case standard, blue, green, orange, pink, purple, yellow
+    var id: String { rawValue }
+    var title: String { self == .standard ? "Default" : rawValue.capitalized }
+}
+
+enum HUDSize: String, CaseIterable, Identifiable {
+    case small, medium, large
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+    var scale: CGFloat {
+        switch self {
+        case .small: return 0.8
+        case .medium: return 1
+        case .large: return 1.3
+        }
+    }
+}
+
+enum HUDPosition: String, CaseIterable, Identifiable {
+    case top, middle, bottom
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+}
+
+enum HUDDuration: String, CaseIterable, Identifiable {
+    case short, normal, long
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+    var seconds: Double {
+        switch self {
+        case .short: return 0.5
+        case .normal: return 0.8
+        case .long: return 2
+        }
     }
 }

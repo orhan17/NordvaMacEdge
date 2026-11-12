@@ -4,7 +4,7 @@ import NordvaMacEdgeCore
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let demoHUD: Bool
     private let settings = Settings()
-    private let hud = HUD()
+    private lazy var hud = HUD(settings: settings)
     private var statusItem: NSStatusItem?
     private var engine: GestureEngine?
     private var touches: TouchSource?
@@ -16,7 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var settingsWindow = SettingsWindowController(
         settings: settings,
         surfaceSize: { [weak self] in self?.touches?.surfaceSize },
-        requestAccess: { [weak self] in self?.askPermission() }
+        requestAccess: { [weak self] in self?.askPermission() },
+        previewHUD: { [weak self] in self?.previewHUD() }
     )
 
     private let enabledItem = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
@@ -176,6 +177,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openSettings() {
         settingsWindow.show()
+    }
+
+    private func previewHUD() {
+        hud.show(kind: .volume, edge: settings.volumeSide, level: 0.65)
+        hud.hideSoon()
     }
 
     private func runHUDDemo() {
