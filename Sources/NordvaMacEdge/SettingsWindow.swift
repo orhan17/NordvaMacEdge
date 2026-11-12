@@ -8,6 +8,8 @@ final class SettingsWindowController {
     private let requestAccess: () -> Void
     private let previewHUD: () -> Void
     private var window: NSWindow?
+    private var hosting: NSHostingController<SettingsView>?
+    private static let screenMargin: CGFloat = 40
 
     init(
         settings: Settings,
@@ -23,19 +25,23 @@ final class SettingsWindowController {
 
     func show() {
         if window == nil {
-            let view = SettingsView(settings: settings, surface: surfaceSize(), requestAccess: requestAccess, previewHUD: previewHUD)
-            let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+            let hosting = NSHostingController(rootView: view(maxHeight: .infinity))
+            let window = NSWindow(contentViewController: hosting)
             window.title = "NordvaMacEdge Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
+            self.hosting = hosting
             self.window = window
         }
-        guard let window else { return }
+        guard let window, let hosting else { return }
         // center() uses the screen with the key window; the menu was opened on the screen with the pointer.
         let mouse = NSEvent.mouseLocation
         if let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }),
            !window.isVisible || window.screen != screen {
             let area = screen.visibleFrame
+            let titlebar = window.frame.height - window.contentRect(forFrameRect: window.frame).height
+            hosting.rootView = view(maxHeight: area.height - titlebar - Self.screenMargin)
+            window.setContentSize(hosting.view.fittingSize)
             let size = window.frame.size
             window.setFrameOrigin(NSPoint(
                 x: area.midX - size.width / 2,
@@ -46,9 +52,20 @@ final class SettingsWindowController {
         window.makeKeyAndOrderFront(nil)
     }
 
+    /// Grows with its content and scrolls only when the content is taller than the screen.
+    private func view(maxHeight: CGFloat) -> SettingsView {
+        SettingsView(
+            settings: settings,
+            surface: surfaceSize(),
+            maxHeight: maxHeight,
+            requestAccess: requestAccess,
+            previewHUD: previewHUD
+        )
+    }
+
     /// `--settings-snapshot <path>`: renders the window content to a PNG without showing it.
     func snapshot(to url: URL) {
-        let view = NSHostingView(rootView: SettingsView(settings: settings, surface: surfaceSize(), requestAccess: {}, previewHUD: {}))
+        let view = NSHostingView(rootView: self.view(maxHeight: .infinity))
         view.frame.size = view.fittingSize
         let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
         window.contentView = view
@@ -62,6 +79,7 @@ final class SettingsWindowController {
 private struct SettingsView: View {
     @ObservedObject var settings: Settings
     let surface: (width: Double, height: Double)?
+    let maxHeight: CGFloat
     let requestAccess: () -> Void
     let previewHUD: () -> Void
 
@@ -112,7 +130,7 @@ private struct SettingsView: View {
                 )
             }
 
-            Section("Bar") {
+            Section("Indicator") {
                 Picker("Style", selection: preview($settings.hudStyle)) {
                     ForEach(HUDStyle.allCases) { Text($0.title).tag($0) }
                 }
@@ -172,11 +190,13 @@ private struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420, height: 520)
+        .frame(width: 460)
+        .frame(maxHeight: maxHeight)
+        .fixedSize(horizontal: false, vertical: true)
         .onReceive(poll) { _ in accessGranted = ClickBlocker.hasPermission }
     }
 
-    /// Shows the bar after each change, so the effect is visible right away.
+    /// Shows the indicator after each change, so the effect is visible right away.
     private func preview<Value>(_ binding: Binding<Value>) -> Binding<Value> {
         Binding(
             get: { binding.wrappedValue },

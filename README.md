@@ -62,12 +62,14 @@ Turn each gesture on or off, swap the sides, switch the haptic clicks off, and t
 feels: how far to slide for the full volume range, how far per app in the switcher and how
 slow the switcher slide must be.
 Distances are shown in centimeters of your own trackpad.
+The **Indicator** section changes how the level is shown: a bar, a ring or just the percentage,
+its color, size, place along the edge and how long it stays on screen. Every change shows a preview.
 
 <p align="center"><img src="docs/settings.png" width="460" alt="Settings window"></p>
 
 ## Features
 
-- **Smooth.** The level follows your finger without lag, and an indicator appears at the edge of the screen.
+- **Smooth.** The level follows your finger without lag, and an indicator appears at the edge of the screen, full-screen apps included.
 - **Stays out of your way.** Normal pointing, two-finger scrolling, clicking and dragging near the edges work as before: a gesture starts only when the finger lands right at the edge and moves along it.
 - **The pointer stays put** while a gesture is in progress.
 - **External monitors too.** Brightness follows the pointer: Apple displays work like the built-in
@@ -143,7 +145,7 @@ The icon is drawn in code: `swift scripts/make-icon.swift` regenerates `Resource
 | `Sources/NordvaMacEdge/Controls.swift` | volume via CoreAudio, brightness of the display under the pointer via DisplayServices |
 | `Sources/NordvaMacEdge/MonitorBrightness.swift` | brightness of other monitors over DDC/CI |
 | `Sources/NordvaMacEdgeCore/DDCPacket.swift` | builds and parses DDC/CI messages |
-| `Sources/NordvaMacEdge/HUD.swift` | the level indicator next to the screen edge |
+| `Sources/NordvaMacEdge/HUD.swift` | the level indicator next to the screen edge: bar, ring or percentage |
 | `Sources/NordvaMacEdgeCore/LevelHaptics.swift` | decides when a level change should click |
 | `Sources/NordvaMacEdge/Haptics.swift` | plays the trackpad clicks |
 | `Sources/NordvaMacEdge/Settings.swift` | preferences, read by gesture code straight from UserDefaults |
@@ -213,6 +215,11 @@ A frame goes: trackpad → `TouchSource` → `GestureEngine` → `EdgeGestureRec
 - **Reading a monitor is slow.** A DDC read takes ~65 ms and would delay the start of a slide, so
   the level is read once and reused for a minute after the last change. Changing the brightness
   with the monitor's own buttons in that minute makes the next slide start from the old value.
+- **The indicator did not show over full-screen apps.** The level changed, but no indicator
+  appeared. Despite `.canJoinAllSpaces`, a panel that has been shown on a desktop space can stay
+  tied to it: ordered front while a full-screen app is active, it counts as visible but stays
+  on the desktop. A panel created while the full-screen space is active does appear there, so
+  when the panel is not on the active space after it is ordered front, a fresh one replaces it.
 - **The framework only reads touches, it does not take them from the system.** The pointer
   would move with the finger. So the pointer is detached from the mouse
   (`CGAssociateMouseAndMouseCursorPosition`) and moved back on every frame.
